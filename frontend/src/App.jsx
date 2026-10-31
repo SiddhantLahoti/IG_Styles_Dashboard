@@ -21,6 +21,7 @@ import {
 
 const initialFilters = {
   lab_grown: '',
+  image_source: '',        
   category: [],
   sales_cat1: [],
   sales_cat2: [],

@@ -10,7 +10,6 @@ from config import (
     COL_METAL, COL_COLOR, COL_TOTAL_WT, COL_CON_BY_DESC, COL_CON_BY_DESC1, COL_CREAT_BY_DESC, COL_CREAT_BY_DESC1, COL_WET_BY_DESC, COL_WET_BY_DESC1,
     COL_RM_DSG, COL_RM_CTG, COL_RM_SUBCTG, COL_RM_LN1, COL_RM_LN2, COL_RM_QTY, COL_RM_WT ,COL_SET_CD
 )
-
 _df_cache = None
 _rm_map = {}
 _filter_options_cache = {}
@@ -61,9 +60,9 @@ def load_data(force_reload: bool = False):
     global _df_cache, _rm_map, _filter_options_cache, _last_mtimes
 
     with _lock:
-        # if force_reload:
-        #     refresh_excel_file_via_app(EXCEL_FILE_A)
-        #     refresh_excel_file_via_app(EXCEL_FILE_B)
+        if force_reload:
+            refresh_excel_file_via_app(EXCEL_FILE_A)
+            refresh_excel_file_via_app(EXCEL_FILE_B)
 
         mtime_a = os.path.getmtime(EXCEL_FILE_A) if os.path.exists(EXCEL_FILE_A) else 0
         mtime_b = os.path.getmtime(EXCEL_FILE_B) if os.path.exists(EXCEL_FILE_B) else 0
@@ -113,39 +112,81 @@ def load_data(force_reload: bool = False):
             df_b[COL_RM_QTY] = pd.to_numeric(df_b[COL_RM_QTY], errors="coerce").fillna(0).astype(int)
             df_b[COL_RM_WT] = pd.to_numeric(df_b[COL_RM_WT], errors="coerce").fillna(0.0)
 
-            # Build fast lookup dictionary for File B
+            # Build fast lookup dictionary for File B (Fast Single Pass)
             print("[INFO] Building Raw Material lookup index...")
             rm_map = {}
-            for dsg, group in df_b.groupby(COL_RM_DSG):
-                rows = group[[COL_RM_CTG, COL_RM_SUBCTG, COL_RM_LN1, COL_RM_LN2, COL_RM_QTY, COL_RM_WT]].to_dict(orient="records")
-                ctgs = {r[COL_RM_CTG] for r in rows if r[COL_RM_CTG]}
-                subctgs = {r[COL_RM_SUBCTG] for r in rows if r[COL_RM_SUBCTG]}
-                ln1_list = [r[COL_RM_LN1] for r in rows if r[COL_RM_LN1] > 0]
-                ln2_list = [r[COL_RM_LN2] for r in rows if r[COL_RM_LN2] > 0]
-                wt_list = [r[COL_RM_WT] for r in rows if r[COL_RM_WT] > 0]
+            
+            # Using itertuples is 20x faster than groupby.to_dict()
+            for row in df_b.itertuples(index=False):
+                dsg = getattr(row, COL_RM_DSG)
+                if not dsg:
+                    continue
+                
+                ctg = getattr(row, COL_RM_CTG)
+                subctg = getattr(row, COL_RM_SUBCTG)
+                ln1 = float(getattr(row, COL_RM_LN1, 0.0) or 0.0)
+                ln2 = float(getattr(row, COL_RM_LN2, 0.0) or 0.0)
+                qty = int(getattr(row, COL_RM_QTY, 0) or 0)
+                wt = float(getattr(row, COL_RM_WT, 0.0) or 0.0)
 
-                rm_map[dsg] = {
-                    "items": rows,
-                    "ctgs": list(ctgs),
-                    "subctgs": list(subctgs),
-                    "total_stones_wt": round(sum(r[COL_RM_WT] for r in rows), 3),
-                    "total_stones_qty": sum(r[COL_RM_QTY] for r in rows),
-                    "min_ln1": min(ln1_list) if ln1_list else 0.0,
-                    "max_ln1": max(ln1_list) if ln1_list else 0.0,
-                    "min_ln2": min(ln2_list) if ln2_list else 0.0,
-                    "max_ln2": max(ln2_list) if ln2_list else 0.0,
-                    "min_rm_wt": min(wt_list) if wt_list else 0.0,
-                    "max_rm_wt": max(wt_list) if wt_list else 0.0,
+                item_record = {
+                    COL_RM_CTG: ctg,
+                    COL_RM_SUBCTG: subctg,
+                    COL_RM_LN1: ln1,
+                    COL_RM_LN2: ln2,
+                    COL_RM_QTY: qty,
+                    COL_RM_WT: wt
                 }
 
-            _rm_map = rm_map
+                if dsg not in rm_map:
+                    rm_map[dsg] = {
+                        "items": [item_record],
+                        "ctgs": {ctg} if ctg else set(),
+                        "subctgs": {subctg} if subctg else set(),
+                        "total_stones_wt": wt,
+                        "total_stones_qty": qty,
+                        "min_ln1": ln1 if ln1 > 0 else 0.0,
+                        "max_ln1": ln1 if ln1 > 0 else 0.0,
+                        "min_ln2": ln2 if ln2 > 0 else 0.0,
+                        "max_ln2": ln2 if ln2 > 0 else 0.0,
+                        "min_rm_wt": wt if wt > 0 else 0.0,
+                        "max_rm_wt": wt if wt > 0 else 0.0,
+                    }
+                else:
+                    entry = rm_map[dsg]
+                    entry["items"].append(item_record)
+                    if ctg: entry["ctgs"].add(ctg)
+                    if subctg: entry["subctgs"].add(subctg)
+                    entry["total_stones_wt"] = round(entry["total_stones_wt"] + wt, 3)
+                    entry["total_stones_qty"] += qty
+                    if ln1 > 0:
+                        entry["min_ln1"] = min(entry["min_ln1"], ln1) if entry["min_ln1"] > 0 else ln1
+                        entry["max_ln1"] = max(entry["max_ln1"], ln1)
+                    if ln2 > 0:
+                        entry["min_ln2"] = min(entry["min_ln2"], ln2) if entry["min_ln2"] > 0 else ln2
+                        entry["max_ln2"] = max(entry["max_ln2"], ln2)
+                    if wt > 0:
+                        entry["min_rm_wt"] = min(entry["min_rm_wt"], wt) if entry["min_rm_wt"] > 0 else wt
+                        entry["max_rm_wt"] = max(entry["max_rm_wt"], wt)
 
-            # Pre-attach summary attributes to File A for fast filtering & rendering
+            # Convert sets to lists
+            for entry in rm_map.values():
+                entry["ctgs"] = list(entry["ctgs"])
+                entry["subctgs"] = list(entry["subctgs"])
+
+            _rm_map = rm_map
+            print(f"[INFO] Raw Material index built successfully ({len(rm_map):,} designs mapped)!")
+
+            print("[INFO] Attaching RM summary attributes to File A...")
             df_a["rm_ctgs"] = df_a[COL_STYLE].map(lambda k: rm_map.get(k, {}).get("ctgs", []))
             df_a["rm_subctgs"] = df_a[COL_STYLE].map(lambda k: rm_map.get(k, {}).get("subctgs", []))
             df_a["rm_stones_wt"] = df_a[COL_STYLE].map(lambda k: rm_map.get(k, {}).get("total_stones_wt", 0.0))
             df_a["rm_stones_qty"] = df_a[COL_STYLE].map(lambda k: rm_map.get(k, {}).get("total_stones_qty", 0))
 
+            print("[INFO] Pre-tagging image sources for styles...")
+            from image_service import get_image_source_for_style
+            df_a["image_source"] = df_a[COL_STYLE].apply(get_image_source_for_style)
+            print("[INFO] Image sources tagged successfully!")
             _df_cache = df_a
             _last_mtimes = {"a": mtime_a, "b": mtime_b}
 

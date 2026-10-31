@@ -18,6 +18,8 @@ def apply_filters_and_paginate(
     df: pd.DataFrame,
     search_query: Optional[str] = None,
     lab_grown: Optional[str] = None,
+    image_source: Optional[str] = None,         
+    sieve_match_mode: Optional[str] = "any",
     # File A Multi-select Dropdown Filters
     categories: Optional[List[str]] = None,
     sales_cat1: Optional[List[str]] = None,
@@ -100,6 +102,11 @@ def apply_filters_and_paginate(
         filtered_df = filtered_df[filtered_df[COL_STYLE].str.upper().str.startswith("L-")]
     elif lab_grown == "natural":
         filtered_df = filtered_df[~filtered_df[COL_STYLE].str.upper().str.startswith("L-")]
+    
+    # Image Source Filter ('primary', 'secondary', 'none')
+    if image_source in ["primary", "secondary", "none"]:
+        filtered_df = filtered_df[filtered_df["image_source"] == image_source]
+    
     # 3. File A Date & Total Weight Range Filters
     if start_date:
         filtered_df = filtered_df[filtered_df[COL_DATE] >= pd.to_datetime(start_date)]
@@ -119,7 +126,7 @@ def apply_filters_and_paginate(
     ])
 
     if rm_filter_active:
-        rm_lookup = data_loader._rm_map  # Always accesses the populated map in real time
+        rm_lookup = data_loader._rm_map
         req_ctgs = set(rm_categories) if rm_categories else None
         req_subctgs = set(rm_subcategories) if rm_subcategories else None
 
@@ -131,7 +138,6 @@ def apply_filters_and_paginate(
             if req_subctgs and not (req_subctgs & set(data.get("subctgs", []))):
                 continue
 
-            # Match stone row sieve ranges and weight
             items = data.get("items", [])
             matched_any_stone = False
 
@@ -142,7 +148,32 @@ def apply_filters_and_paginate(
 
             if not has_numeric_rm_constraint:
                 matched_any_stone = True
+            elif sieve_match_mode == "exclusive" and (ln1 is not None or ln2 is not None):
+                # Exclusive mode: 100% of stone rows must strictly match the sieve size
+                if not items:
+                    matched_any_stone = False
+                else:
+                    all_match = True
+                    for stone in items:
+                        stone_ln1 = stone.get(COL_RM_LN1, 0.0)
+                        stone_ln2 = stone.get(COL_RM_LN2, 0.0)
+                        wt = stone.get(COL_RM_WT, 0.0)
+
+                        if ln1 is not None and round(stone_ln1, 3) != round(ln1, 3):
+                            all_match = False
+                            break
+                        if ln2 is not None and round(stone_ln2, 3) != round(ln2, 3):
+                            all_match = False
+                            break
+                        if min_rm_wt is not None and wt < min_rm_wt:
+                            all_match = False
+                            break
+                        if max_rm_wt is not None and wt > max_rm_wt:
+                            all_match = False
+                            break
+                    matched_any_stone = all_match
             else:
+                # Default "Contains / Any" mode: at least one stone row matches
                 for stone in items:
                     stone_ln1 = stone.get(COL_RM_LN1, 0.0)
                     stone_ln2 = stone.get(COL_RM_LN2, 0.0)

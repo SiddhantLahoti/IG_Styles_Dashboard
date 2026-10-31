@@ -30,14 +30,14 @@ sync_status = {
 def background_initial_sync():
     global sync_status
     try:
+        sync_status["step"] = "Indexing jewelry image directories..."
+        index_image_directories()
+        from image_service import _primary_index, _fallback_index
+        sync_status["images"] = len(_primary_index) + len(_fallback_index)
+
         sync_status["step"] = "Reading and indexing Excel files..."
         df = load_data(force_reload=True)
         sync_status["records"] = len(df)
-
-        sync_status["step"] = "Indexing jewelry image directories..."
-        index_image_directories()
-        from image_service import _primary_index, _fallback_files
-        sync_status["images"] = len(_primary_index) + len(_fallback_files)
 
         sync_status["step"] = "Ready"
         sync_status["is_ready"] = True
@@ -114,6 +114,8 @@ def api_get_products(
     min_total_wt: Optional[float] = None,
     max_total_wt: Optional[float] = None,
     lab_grown: Optional[str] = Query(None),
+    image_source: Optional[str] = Query(None),
+    sieve_match_mode: Optional[str] = Query("any"),
     # File B Filters
     rm_category: Optional[List[str]] = Query(None),
     rm_subcategory: Optional[List[str]] = Query(None),
@@ -145,6 +147,8 @@ def api_get_products(
         min_total_wt=min_total_wt,
         max_total_wt=max_total_wt,
         lab_grown=lab_grown,
+        image_source=image_source,
+        sieve_match_mode=sieve_match_mode,
         rm_categories=rm_category,
         rm_subcategories=rm_subcategory,
         ln1=ln1,
@@ -175,6 +179,8 @@ def api_get_all_filtered_products(
     min_total_wt: Optional[float] = None,
     max_total_wt: Optional[float] = None,
     lab_grown: Optional[str] = Query(None),
+    image_source: Optional[str] = Query(None),
+    sieve_match_mode: Optional[str] = Query("any"),
     rm_category: Optional[List[str]] = Query(None),
     rm_subcategory: Optional[List[str]] = Query(None),
     ln1: Optional[float] = None,
@@ -203,6 +209,8 @@ def api_get_all_filtered_products(
         min_total_wt=min_total_wt,
         max_total_wt=max_total_wt,
         lab_grown=lab_grown,
+        image_source=image_source,
+        sieve_match_mode=sieve_match_mode,
         rm_categories=rm_category,
         rm_subcategories=rm_subcategory,
         ln1=ln1,

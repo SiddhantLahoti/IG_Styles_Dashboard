@@ -1,4 +1,5 @@
 import io
+import re
 import os
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -15,7 +16,7 @@ from data_loader import get_rm_details
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 _primary_index: Dict[str, Path] = {}
-_fallback_files: list[Path] = []
+_fallback_index: Dict[str, Path] = {}        # Fast dictionary lookup for LD
 _match_cache: Dict[str, Optional[Path]] = {}
 _is_indexed = False
 
@@ -29,14 +30,27 @@ def _locked_picture_frame(self, idx):
 
 ssd.SpreadsheetDrawing._picture_frame = _locked_picture_frame
 
+def get_image_source_for_style(style_code: str) -> str:
+    """Categorizes style as 'primary' (500), 'secondary' (Sketch), or 'none' (Missing)."""
+    q = str(style_code).strip().lower()
+    if not q or q == "-":
+        return "none"
+
+    if q in _primary_index:
+        return "primary"
+
+    if find_image_for_style(style_code):
+        return "secondary"
+
+    return "none"
 
 def index_image_directories():
-    """Builds index of primary and fallback directories in memory."""
-    global _primary_index, _fallback_files, _is_indexed
+    """Builds fast dictionary indexes of primary (500x500) and secondary (Sketch/LD) images."""
+    global _primary_index, _fallback_index, _match_cache, _is_indexed
 
     os.makedirs(IMAGE_CACHE_DIR, exist_ok=True)
     _primary_index.clear()
-    _fallback_files.clear()
+    _fallback_index.clear()
     _match_cache.clear()
 
     # 1. Primary folder (500x500 - shallow scan)
@@ -47,21 +61,48 @@ def index_image_directories():
                 if entry.is_file() and Path(entry.name).suffix.lower() in SUPPORTED_EXTENSIONS:
                     stem = Path(entry.name).stem.strip().lower()
                     _primary_index[stem] = Path(entry.path)
-            print(f"[INFO] Indexed {len(_primary_index)} primary images.")
+            print(f"[INFO] Indexed {len(_primary_index):,} primary (500x500) images.")
         except Exception as e:
             print(f"[WARNING] Primary folder index error: {e}")
 
-    # 2. Fallback folder (LD - recursive scan)
+    # 2. Fallback folder (Secondary - Sketch / LD recursive scan)
     f_path = Path(FALLBACK_IMG_DIR)
     if f_path.exists():
         try:
             for root, _, files in os.walk(f_path):
                 for f in files:
-                    if Path(f).suffix.lower() in SUPPORTED_EXTENSIONS:
-                        _fallback_files.append(Path(root) / f)
-            print(f"[INFO] Indexed {len(_fallback_files)} fallback images.")
+                    p = Path(f)
+                    if p.suffix.lower() in SUPPORTED_EXTENSIONS:
+                        full_path = Path(root) / f
+                        stem = p.stem.strip().lower()
+
+                        # A. Index exact stem
+                        if stem not in _fallback_index:
+                            _fallback_index[stem] = full_path
+
+                        # B. Index cleaned stem without trailing spaces/dots/brackets
+                        stem_clean = stem.rstrip(" ._()")
+                        if stem_clean not in _fallback_index:
+                            _fallback_index[stem_clean] = full_path
+
+                        # C. Strip known prefixes (e.g., 'sketch_d1234' or 'sketch d1234' -> 'd1234')
+                        for prefix in ["sketch_", "sketch ", "sketch-", "sketch", "ld_", "ld ", "ld-"]:
+                            if stem.startswith(prefix):
+                                stripped = stem[len(prefix):].strip(" ._()")
+                                if stripped and stripped not in _fallback_index:
+                                    _fallback_index[stripped] = full_path
+
+                        # D. Split ONLY by underscores, spaces, and brackets (NEVER by hyphens '-')
+                        # This preserves 'L-12345' while extracting it from 'SKETCH_L-12345_TOP.jpg'
+                        tokens = re.split(r'[_ \t\(\)\[\]]+', stem)
+                        for token in tokens:
+                            token_clean = token.strip(" ._")
+                            if token_clean and token_clean not in _fallback_index:
+                                _fallback_index[token_clean] = full_path
+
+            print(f"[INFO] Indexed {len(_fallback_index):,} secondary (Sketch) lookup keys.")
         except Exception as e:
-            print(f"[WARNING] Fallback folder index error: {e}")
+            print(f"[WARNING] Secondary folder index error: {e}")
 
     _is_indexed = True
 
@@ -78,24 +119,26 @@ def find_image_for_style(style_code: str) -> Optional[Path]:
     if q in _match_cache:
         return _match_cache[q]
 
-    # Priority 1: Exact in 500x500
+    # Priority 1: Exact match in 500x500 (Primary)
     if q in _primary_index:
         res = _primary_index[q]
         _match_cache[q] = res
         return res
 
-    # Priority 2: Fallback LD
-    matched = None
-    for p in _fallback_files:
-        stem_clean = p.stem.strip().lower()
-        if stem_clean.rstrip(" _-").endswith(q):
-            matched = p
-            break
-        if q in stem_clean and matched is None:
-            matched = p
+    # Priority 2: Match in Secondary (Sketch) dictionary
+    if q in _fallback_index:
+        res = _fallback_index[q]
+        _match_cache[q] = res
+        return res
 
-    _match_cache[q] = matched
-    return matched
+    # Priority 3: Fallback without 'L-' prefix if user code has it
+    if q.startswith("l-") and q[2:] in _fallback_index:
+        res = _fallback_index[q[2:]]
+        _match_cache[q] = res
+        return res
+
+    _match_cache[q] = None
+    return None
 
 
 # def get_cropped_image_bytes(image_path: Path, full_resolution: bool = False, tolerance: int = 15) -> bytes:

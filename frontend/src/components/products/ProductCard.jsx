@@ -47,8 +47,25 @@ export default function ProductCard({
       {/* Image Thumbnail with zoom trigger */}
       <div
         onClick={() => onOpenZoom(styleCode)}
-        className="h-44 bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-100 p-2 cursor-pointer group"
+        className="relative h-44 bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-100 p-2 cursor-pointer group"
       >
+        {/* Source Badge */}
+        {item.image_source === 'primary' && (
+          <span className="absolute top-2 left-2 z-10 bg-sky-600/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">
+            500x500
+          </span>
+        )}
+        {item.image_source === 'secondary' && (
+          <span className="absolute top-2 left-2 z-10 bg-amber-600/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">
+            Sketch
+          </span>
+        )}
+        {item.image_source === 'none' && (
+          <span className="absolute top-2 left-2 z-10 bg-slate-500/80 text-white text-[9px] font-medium px-1.5 py-0.5 rounded shadow-sm">
+            No Img
+          </span>
+        )}
+
         <img
           src={imgSrc}
           alt={styleCode}

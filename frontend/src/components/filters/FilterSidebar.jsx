@@ -62,6 +62,39 @@ export default function FilterSidebar({
         </div>
       </div>
       
+
+      {/* Image Source Filter */}
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1.5">
+        <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+          Image Source
+        </label>
+        <div className="grid grid-cols-4 gap-1 text-[11px]">
+          {[
+            { label: 'All', value: '' },
+            { label: '500x500', value: 'primary' },
+            { label: 'Sketch', value: 'secondary' },
+            { label: 'Missing', value: 'none' },
+          ].map((option) => {
+            const isSelected = (filters.image_source || '') === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onFilterChange('image_source', option.value)}
+                className={`py-1 px-1 rounded text-center font-medium transition-all ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white shadow-sm font-bold'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+
       {/* File A Filters */}
       <MultiSelectDropdown
         label="Category"
@@ -229,6 +262,50 @@ export default function FilterSidebar({
         onChange={(val) => onFilterChange('rm_subcategory', val)}
       />
 
+        {/* Sieve Match Mode (Contains vs Exclusive) */}
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+            Sieve Filter Mode
+          </label>
+          <span 
+            className="text-[11px] text-slate-400 cursor-help px-1 rounded hover:text-slate-600"
+            title="Contains: Shows pieces containing this sieve alongside other stone sizes.&#10;Exclusive: Shows pieces containing strictly this sieve size and no other stone sizes."
+          >
+            ⓘ
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => onFilterChange('sieve_match_mode', 'any')}
+            className={`py-1 px-1.5 rounded text-center font-medium transition-all ${
+              (filters.sieve_match_mode || 'any') === 'any'
+                ? 'bg-indigo-600 text-white shadow-sm font-bold'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            Contains
+          </button>
+          <button
+            type="button"
+            onClick={() => onFilterChange('sieve_match_mode', 'exclusive')}
+            className={`py-1 px-1.5 rounded text-center font-medium transition-all ${
+              filters.sieve_match_mode === 'exclusive'
+                ? 'bg-amber-600 text-white shadow-sm font-bold'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            Only This Sieve
+          </button>
+        </div>
+        {filters.sieve_match_mode === 'exclusive' && (filters.ln1 || filters.ln2) && (
+          <p className="text-[10px] text-amber-700 font-medium">
+            ⚡ Showing designs where 100% of stones match this sieve.
+          </p>
+        )}
+      </div>
+    
       {/* Sieve Sizes */}
       <div className="grid grid-cols-2 gap-2">
         <div>

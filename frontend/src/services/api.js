@@ -9,7 +9,7 @@ function buildQueryParams(filters, page = 1, pageSize = 24, search = '') {
   // Range & single inputs
   const singleFields = [
     'start_date', 'end_date', 'min_total_wt', 'max_total_wt',
-    'ln1', 'ln2', 'min_rm_wt', 'max_rm_wt', 'lab_grown'
+    'ln1', 'ln2', 'min_rm_wt', 'max_rm_wt', 'lab_grown','image_source', 'sieve_match_mode'
   ];
 
   singleFields.forEach((field) => {
