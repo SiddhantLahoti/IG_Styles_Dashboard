@@ -8,6 +8,9 @@ export default function Navbar({
   setSearchQuery,
   onSync,
   isSyncing,
+  totalItems = 0,              
+  onShortlistAllFiltered,      
+  isShortlistingAll = false,    
 }) {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
@@ -49,7 +52,27 @@ export default function Navbar({
             )}
           </button>
         </div>
+            {/* Center/Right Header Controls: Count & Shortlist Button */}
+      <div className="flex items-center gap-2.5">
+        {/* Total Count Badge */}
+<div className="text-xs font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-md whitespace-nowrap">
+  <span className="font-bold text-slate-800">{(totalItems || 0).toLocaleString()}</span> designs
+</div>
 
+        {/* Shortlist All Filtered Results Button */}
+{activeTab === 'explore' && (
+  <button
+    type="button"
+    onClick={onShortlistAllFiltered}
+    disabled={isShortlistingAll || totalItems === 0}
+    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 active:scale-95 transition-all shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer"
+    title="Shortlist all designs matching current filters"
+  >
+    <span>⭐</span>
+    {isShortlistingAll ? 'Shortlisting...' : 'Shortlist All Filtered'}
+  </button>
+)}
+      </div>
         {/* Search Input */}
         <div className="flex-1 max-w-xs">
           <input

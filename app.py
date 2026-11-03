@@ -6,11 +6,14 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 import threading
 import uuid
+import asyncio
+from datetime import datetime, time as dtime, timedelta
 import os
+import data_loader
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from data_loader import load_data, get_rm_details
-from filters import get_unique_filter_options, apply_filters_and_paginate
+from filters import get_unique_filter_options, apply_filters_and_paginate , get_cascading_filter_options
 from image_service import (
     index_image_directories, find_image_for_style,
     get_cropped_image_bytes, generate_shortlist_excel, generate_catalogue_excel
@@ -36,8 +39,11 @@ def background_initial_sync():
         sync_status["images"] = len(_primary_index) + len(_fallback_index)
 
         sync_status["step"] = "Reading and indexing Excel files..."
-        df = load_data(force_reload=True)
-        sync_status["records"] = len(df)
+        load_data(force_reload=True)
+        conn = data_loader.get_db_connection()
+        total_records = conn.execute("SELECT COUNT(*) FROM styles;").fetchone()[0]
+        conn.close()
+        sync_status["records"] = total_records
 
         sync_status["step"] = "Ready"
         sync_status["is_ready"] = True
@@ -46,11 +52,57 @@ def background_initial_sync():
         sync_status["step"] = f"Error: {e}"
         print(f"[ERROR] Initial sync failed: {e}")
 
+async def schedule_daily_refresh(target_hour: int = 2, target_minute: int = 0):
+    """
+    Runs in the background and triggers load_data(force_reload=True)
+    automatically every day at the target time (default: 02:00 AM).
+    """
+    while True:
+        now = datetime.now()
+        # Compute next target run datetime
+        target_today = datetime.combine(now.date(), dtime(target_hour, target_minute))
+        if now >= target_today:
+            next_run = target_today + timedelta(days=1)
+        else:
+            next_run = target_today
+
+        wait_seconds = (next_run - now).total_seconds()
+        print(f"[INFO] Next scheduled daily Excel sync at: {next_run.strftime('%Y-%m-%d %H:%M:%S')} (in {int(wait_seconds/60)} mins)")
+        await asyncio.sleep(wait_seconds)
+
+        try:
+            print("[INFO] Starting scheduled daily database sync...")
+            sync_status["is_ready"] = False
+            sync_status["step"] = "Scheduled sync: Updating Excel database..."
+            
+            # Re-index images and rebuild catalog.db
+            index_image_directories()
+            load_data(force_reload=True)
+
+            conn = data_loader.get_db_connection()
+            total_records = conn.execute("SELECT COUNT(*) FROM styles;").fetchone()[0]
+            conn.close()
+
+            sync_status["records"] = total_records
+            sync_status["step"] = "Ready"
+            sync_status["is_ready"] = True
+            print(f"[INFO] Daily sync complete! Re-indexed {total_records:,} records.")
+        except Exception as e:
+            sync_status["step"] = f"Daily sync error: {e}"
+            print(f"[ERROR] Scheduled daily sync failed: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. Startup initial sync
     t = threading.Thread(target=background_initial_sync, daemon=True)
     t.start()
+    
+    # 2. Daily automated schedule (Runs at 02:00 AM every night)
+    scheduler_task = asyncio.create_task(schedule_daily_refresh(target_hour=2, target_minute=0))
+    
     yield
+    
+    scheduler_task.cancel()
 
 app = FastAPI(title="Design Catalog Dashboard", lifespan=lifespan)
 
@@ -85,8 +137,68 @@ def api_get_product_image(style_code: str, full: bool = False):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/filters")
-def api_get_filters():
-    return get_unique_filter_options()
+def api_get_filters(
+    search: Optional[str] = None,
+    category: Optional[List[str]] = Query(None),
+    size: Optional[List[str]] = Query(None),
+    sales_cat1: Optional[List[str]] = Query(None),
+    sales_cat2: Optional[List[str]] = Query(None),
+    brand: Optional[List[str]] = Query(None),
+    tone: Optional[List[str]] = Query(None),
+    customer: Optional[List[str]] = Query(None),
+    metal: Optional[List[str]] = Query(None),
+    color: Optional[List[str]] = Query(None),
+    set_cd: Optional[List[str]] = Query(None),
+    concept_by: Optional[List[str]] = Query(None),
+    creative_by: Optional[List[str]] = Query(None),
+    weight_by: Optional[List[str]] = Query(None),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    min_total_wt: Optional[float] = None,
+    max_total_wt: Optional[float] = None,
+    min_wax_wt: Optional[float] = None,
+    max_wax_wt: Optional[float] = None,
+    lab_grown: Optional[str] = Query(None),
+    image_source: Optional[str] = Query(None),
+    sieve_match_mode: Optional[str] = Query("any"),
+    rm_category: Optional[List[str]] = Query(None),
+    rm_subcategory: Optional[List[str]] = Query(None),
+    ln1: Optional[float] = None,
+    ln2: Optional[float] = None,
+    min_rm_wt: Optional[float] = None,
+    max_rm_wt: Optional[float] = None
+):
+    return get_cascading_filter_options(
+        search_query=search,
+        lab_grown=lab_grown,
+        image_source=image_source,
+        sieve_match_mode=sieve_match_mode,
+        categories=category,
+        sizes=size,
+        sales_cat1=sales_cat1,
+        sales_cat2=sales_cat2,
+        brands=brand,
+        tones=tone,
+        customers=customer,
+        metals=metal,
+        colors=color,
+        set_codes=set_cd,
+        concept_designers=concept_by,
+        creative_designers=creative_by,
+        weight_designers=weight_by,
+        start_date=start_date,
+        end_date=end_date,
+        min_total_wt=min_total_wt,
+        max_total_wt=max_total_wt,
+        min_wax_wt=min_wax_wt,
+        max_wax_wt=max_wax_wt,
+        rm_categories=rm_category,
+        rm_subcategories=rm_subcategory,
+        ln1=ln1,
+        ln2=ln2,
+        min_rm_wt=min_rm_wt,
+        max_rm_wt=max_rm_wt
+    )
 
 @app.get("/api/rm-details/{style_code}")
 def api_get_rm_details(style_code: str):
@@ -116,6 +228,9 @@ def api_get_products(
     lab_grown: Optional[str] = Query(None),
     image_source: Optional[str] = Query(None),
     sieve_match_mode: Optional[str] = Query("any"),
+    size: Optional[List[str]] = Query(None),
+    min_wax_wt: Optional[float] = None,      
+    max_wax_wt: Optional[float] = None,
     # File B Filters
     rm_category: Optional[List[str]] = Query(None),
     rm_subcategory: Optional[List[str]] = Query(None),
@@ -126,9 +241,7 @@ def api_get_products(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=24, ge=12, le=96)
 ):
-    df = load_data()
     return apply_filters_and_paginate(
-        df=df,
         search_query=search,
         categories=category,
         sales_cat1=sales_cat1,
@@ -139,6 +252,9 @@ def api_get_products(
         metals=metal,
         colors=color,
         set_codes=set_cd,
+        sizes=size,
+        min_wax_wt=min_wax_wt,           
+        max_wax_wt=max_wax_wt,
         concept_designers=concept_by,
         creative_designers=creative_by,              
         weight_designers=weight_by,
@@ -181,6 +297,9 @@ def api_get_all_filtered_products(
     lab_grown: Optional[str] = Query(None),
     image_source: Optional[str] = Query(None),
     sieve_match_mode: Optional[str] = Query("any"),
+    size: Optional[List[str]] = Query(None),
+    min_wax_wt: Optional[float] = None,       
+    max_wax_wt: Optional[float] = None,
     rm_category: Optional[List[str]] = Query(None),
     rm_subcategory: Optional[List[str]] = Query(None),
     ln1: Optional[float] = None,
@@ -188,9 +307,7 @@ def api_get_all_filtered_products(
     min_rm_wt: Optional[float] = None,
     max_rm_wt: Optional[float] = None
 ):
-    df = load_data()
     res = apply_filters_and_paginate(
-        df=df,
         search_query=search,
         categories=category,
         sales_cat1=sales_cat1,
@@ -211,6 +328,9 @@ def api_get_all_filtered_products(
         lab_grown=lab_grown,
         image_source=image_source,
         sieve_match_mode=sieve_match_mode,
+        sizes=size,
+        min_wax_wt=min_wax_wt,          
+        max_wax_wt=max_wax_wt,
         rm_categories=rm_category,
         rm_subcategories=rm_subcategory,
         ln1=ln1,
@@ -224,8 +344,11 @@ def api_get_all_filtered_products(
 
 @app.post("/api/refresh")
 def api_force_refresh():
-    df = load_data(force_reload=True)
-    return {"status": "success", "total_records": len(df)}
+    load_data(force_reload=True)
+    conn = data_loader.get_db_connection()
+    cnt = conn.execute("SELECT COUNT(*) FROM styles;").fetchone()[0]
+    conn.close()
+    return {"status": "success", "total_records": cnt}
 
 # Export Endpoints
 class ExportPayload(BaseModel):

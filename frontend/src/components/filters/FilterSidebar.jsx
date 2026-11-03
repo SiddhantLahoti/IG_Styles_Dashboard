@@ -23,14 +23,7 @@ export default function FilterSidebar({
         </button>
       </div>
 
-      {/* Shortlist All Button */}
-      <button
-        type="button"
-        onClick={onShortlistAllFiltered}
-        className="w-full py-2 px-3 text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg border border-amber-300 flex items-center justify-center gap-1.5 shadow-sm transition-colors"
-      >
-        <span>{shortlistAllBtnText || '⭐ Shortlist All Filtered Results'}</span>
-      </button>
+      
 
       {/* Lab Grown / Diamond Origin Filter */}
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1.5">
@@ -172,6 +165,15 @@ export default function FilterSidebar({
         />
       </div>
 
+          <MultiSelectDropdown
+        label="Size"
+        defaultLabel="All Sizes"
+        maxHeightClass="max-h-40"
+        options={options.sizes || []}
+        selected={filters.size || []}
+        onChange={(val) => onFilterChange('size', val)}
+      />
+
       <MultiSelectDropdown
         label="Concept Designer"
         defaultLabel="All Concept By"
@@ -237,6 +239,31 @@ export default function FilterSidebar({
           />
         </div>
       </div>
+
+      {/* Wax Weight Min/Max */}
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Wax Weight (g)</label>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="number"
+            step="0.001"
+            placeholder="Min"
+            value={filters.min_wax_wt ?? ''}
+            onChange={(e) => onFilterChange('min_wax_wt', e.target.value)}
+            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <input
+            type="number"
+            step="0.001"
+            placeholder="Max"
+            value={filters.max_wax_wt ?? ''}
+            onChange={(e) => onFilterChange('max_wax_wt', e.target.value)}
+            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
+      
 
       {/* File B Raw Material Divider */}
       <div className="pt-3 border-t border-slate-200">

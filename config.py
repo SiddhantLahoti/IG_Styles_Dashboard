@@ -1,10 +1,10 @@
 import os
 
 BASE_DIR = os.path.dirname(__file__)
-
+DB_PATH = os.path.join(BASE_DIR, "catalog.db")
 # 1. Dual Excel File Paths
-EXCEL_FILE_A = os.path.join(BASE_DIR, "Design Detail & Ana_v2.xlsx")
-EXCEL_FILE_B = os.path.join(BASE_DIR, "Design Rm Detail_v2.xlsx")
+EXCEL_FILE_A = os.path.join(BASE_DIR, "Design Detail & Ana_v3.xlsx")
+EXCEL_FILE_B = os.path.join(BASE_DIR, "Design Rm Detail_v3.xlsx")
 
 # --- Image Folder Paths (Keep your actual paths) ---
 PRIMARY_IMG_DIR = r"Y:\\"
@@ -30,7 +30,10 @@ COL_CREAT_BY_DESC = "CreatByDesc"
 COL_CREAT_BY_DESC1 = "CreatByDesc1"
 COL_WET_BY_DESC = "WetByDesc"
 COL_WET_BY_DESC1 = "WetByDesc1"
-
+COL_SIZE = "DefultSz"       # Col D: Size
+COL_WAX_WT = "WaxWt"         # Col M: Legacy Wax Weight
+COL_A_WXT = "AWxt"           # Col AE: AWxt
+COL_M_WXT = "MWxt"           # Col AF: MWxt
 # 3. File B Column Definitions (Raw Materials / Stones)
 COL_RM_DSG = "Dsg"              # Col A: Style Number
 COL_RM_CTG = "Ctg"              # Col B: RM Category (D, C, X)

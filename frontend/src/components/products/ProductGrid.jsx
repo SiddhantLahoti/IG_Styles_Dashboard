@@ -20,78 +20,106 @@ export default function ProductGrid({
   onExportRowWise,
   onExportCatalogue,
   onOpenClearConfirm,
+  onBadgeClick,
+  filters
 }) {
   const isShortlistTab = activeTab === 'shortlist';
+  // Computes a sliding window of up to 10 visible page buttons
+  const getPageNumbers = () => {
+    const maxVisible = 10;
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let end = start + maxVisible - 1;
+
+    if (end > totalPages) {
+      end = totalPages;
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    const pages = [];
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   return (
     <main className={`${isShortlistTab ? 'md:col-span-4' : 'md:col-span-3'} space-y-4`}>
-      {/* Top Action Bar */}
-      <div className="flex flex-wrap justify-between items-center gap-2 text-sm text-slate-500 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        <span className="font-medium text-xs text-slate-700">
-          {isShortlistTab
-            ? `Shortlisted Collection: Showing ${totalItems.toLocaleString()} total designs`
-            : `Showing ${totalItems.toLocaleString()} total designs`}
-        </span>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Shortlist Tab Export Actions */}
-          {isShortlistTab && (
-            <>
+      {/* Top Bar: Action Toolbar on Left, Per-Page on Right */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        
+        {/* Left Side: Shortlist Actions (Only visible in Shortlist tab) */}
+        <div className="flex items-center gap-2">
+          {activeTab === 'shortlist' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              
+              
+             {/* Export Buttons */}
               <button
                 type="button"
                 onClick={onExportRowWise}
-                className="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1 text-xs font-medium bg-white text-slate-700 border border-slate-300 rounded hover:bg-slate-50 cursor-pointer transition-all"
               >
-                📥 Download Excel (Row-wise)
+                📥 Export Excel
               </button>
 
-              <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 p-1 rounded-lg">
-                <span className="text-[11px] font-semibold text-indigo-900 pl-1">Catalogue:</span>
-                <select
-                  value={cataloguePerRow}
-                  onChange={(e) => setCataloguePerRow(Number(e.target.value))}
-                  className="text-xs border border-indigo-300 rounded px-1.5 py-0.5 bg-white font-medium text-slate-700"
-                >
-                  <option value={3}>3 per row</option>
-                  <option value={4}>4 per row</option>
-                  <option value={5}>5 per row</option>
-                </select>
+              {/* Grouped Export Catalogue Button + Per Row Selector */}
+              <div className="flex items-center rounded border border-slate-300 bg-white shadow-2xs overflow-hidden">
                 <button
                   type="button"
                   onClick={onExportCatalogue}
-                  className="px-3 py-1 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow-sm transition-colors flex items-center gap-1"
+                  className="px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors"
+                  title={`Export Excel catalogue with ${cataloguePerRow} items per row`}
                 >
-                  🖼️ Download (Catalogue)
+                  📑 Export Catalogue
                 </button>
+
+                <div className="flex items-center border-l border-slate-200 bg-slate-50 px-1.5 py-0.5">
+                  <select
+                    value={cataloguePerRow}
+                    onChange={(e) => setCataloguePerRow(Number(e.target.value))}
+                    className="text-xs font-semibold text-slate-700 bg-transparent border-none focus:outline-hidden cursor-pointer"
+                    title="Choose number of cards per row"
+                  >
+                    <option value={3}>3 / row</option>
+                    <option value={4}>4 / row</option>
+                    <option value={5}>5 / row</option>
+                  </select>
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={onOpenClearConfirm}
-                className="px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors font-medium"
+                className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded border border-transparent hover:border-red-200 cursor-pointer transition-all"
               >
                 Clear All
               </button>
-            </>
+            </div>
+          ) : (
+            /* In 'all' tab, keep empty since total count is in the top header */
+            <div />
           )}
-
-          {/* Page Size Selector */}
-          <div className="flex items-center gap-1.5 ml-1">
-            <label htmlFor="pageSizeSelect" className="text-xs text-slate-600">
-              Per page:
-            </label>
-            <select
-              id="pageSizeSelect"
-              value={pageSize}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="text-xs border border-slate-300 rounded p-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value={24}>24</option>
-              <option value={48}>48</option>
-              <option value={96}>96</option>
-            </select>
-          </div>
         </div>
+
+        {/* Right Side: Per Page Selector (Always stays visible) */}
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <span>Per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="border border-slate-200 rounded px-2 py-1 bg-white text-slate-700 font-medium focus:outline-hidden cursor-pointer"
+          >
+            <option value={12}>12</option>
+            <option value={24}>24</option>
+            <option value={48}>48</option>
+            <option value={96}>96</option>
+          </select>
+        </div>
+
       </div>
 
       {/* Product Cards Grid */}
@@ -112,36 +140,77 @@ export default function ProductGrid({
                 isShortlisted={shortlistedMap.has(code)}
                 onToggleShortlist={onToggleShortlist}
                 onOpenZoom={onOpenZoom}
+                filters={filters}
                 onOpenRmDetails={onOpenRmDetails}
-                onOpenDesigners={onOpenDesigners}  
+                onOpenDesigners={onOpenDesigners} 
+                onBadgeClick={onBadgeClick} 
               />
             );
           })}
         </div>
       )}
 
-      {/* Pagination Controls */}
-      <div className="flex items-center justify-between border-t border-slate-200 pt-4 bg-white p-4 rounded-xl shadow-sm">
-        <button
-          type="button"
-          disabled={currentPage <= 1}
-          onClick={() => onPageChange(currentPage - 1)}
-          className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-50 disabled:opacity-40 transition-colors"
-        >
-          Previous
-        </button>
-        <span className="text-xs text-slate-600 font-medium">
-          Page {currentPage} of {totalPages || 1}
-        </span>
-        <button
-          type="button"
-          disabled={currentPage >= totalPages}
-          onClick={() => onPageChange(currentPage + 1)}
-          className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-50 disabled:opacity-40 transition-colors"
-        >
-          Next
-        </button>
-      </div>
+      {/* Pagination Footer: 10 Visible Page Blocks */}
+      {totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-center gap-1.5 py-6 mt-4 border-t border-slate-200">
+          {/* First & Prev Buttons */}
+          <button
+            type="button"
+            onClick={() => onPageChange(1)}
+            disabled={currentPage === 1}
+            className="px-2.5 py-1 text-xs font-medium rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            title="First Page"
+          >
+            « First
+          </button>
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-2.5 py-1 text-xs font-medium rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            ‹ Prev
+          </button>
+
+          {/* 10 Page Number Blocks */}
+          {getPageNumbers().map((pageNumber) => {
+            const isActive = pageNumber === currentPage;
+            return (
+              <button
+                key={pageNumber}
+                type="button"
+                onClick={() => onPageChange(pageNumber)}
+                className={`min-w-[32px] h-8 px-2 text-xs font-semibold rounded border transition-all ${
+                  isActive
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                }`}
+              >
+                {pageNumber}
+              </button>
+            );
+          })}
+
+          {/* Next & Last Buttons */}
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-2.5 py-1 text-xs font-medium rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            Next ›
+          </button>
+          <button
+            type="button"
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage === totalPages}
+            className="px-2.5 py-1 text-xs font-medium rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            title="Last Page"
+          >
+            Last »
+          </button>
+        </div>
+      )}
     </main>
   );
 }

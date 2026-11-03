@@ -22,12 +22,16 @@ export default function ProductCard({
   onToggleShortlist,
   onOpenZoom,
   onOpenRmDetails,
-  onOpenDesigners
+  onOpenDesigners,
+  onBadgeClick,
+  filters = {},
 }) {
+
+  const isBadgeActive = (key, val) => Array.isArray(filters?.[key]) && filters[key].includes(val);
   const styleCode = item.Dmcd || item.drcd || '-';
   const [imgSrc, setImgSrc] = useState(getProductImageUrl(styleCode));
   const [hasError, setHasError] = useState(false);
-
+  
   const stoneShapes =
     Array.isArray(item.rm_subctgs) && item.rm_subctgs.length
       ? item.rm_subctgs.join(', ')
@@ -41,30 +45,38 @@ export default function ProductCard({
       setImgSrc(getPlaceholderSvg(styleCode));
     }
   };
-
+  // Helper for badge style: Grey if not selected, Blue if selected
+  const getBadgeClass = (key, val) => {
+    const active = isBadgeActive(key, val);
+    return active
+      ? "bg-blue-600 text-white font-semibold px-1.5 py-0.5 rounded text-[9px] shadow-xs cursor-pointer active:scale-95 transition-all"
+      : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 font-medium px-1.5 py-0.5 rounded text-[9px] cursor-pointer active:scale-95 transition-all";
+  };
+  
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
-      {/* Image Thumbnail with zoom trigger */}
+      {/* 1. Image Thumbnail with Floating Badges & Shortlist Button */}
       <div
         onClick={() => onOpenZoom(styleCode)}
         className="relative h-44 bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-100 p-2 cursor-pointer group"
       >
-        {/* Source Badge */}
-        {item.image_source === 'primary' && (
-          <span className="absolute top-2 left-2 z-10 bg-sky-600/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">
-            500x500
-          </span>
-        )}
-        {item.image_source === 'secondary' && (
-          <span className="absolute top-2 left-2 z-10 bg-amber-600/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">
-            Sketch
-          </span>
-        )}
-        {item.image_source === 'none' && (
-          <span className="absolute top-2 left-2 z-10 bg-slate-500/80 text-white text-[9px] font-medium px-1.5 py-0.5 rounded shadow-sm">
-            No Img
-          </span>
-        )}
+        
+        {/* Shortlist Star Button (Floating Top Right) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleShortlist(item);
+          }}
+          title={isShortlisted ? "Remove from Shortlist" : "Add to Shortlist"}
+          className={`absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-sm transition-all ${
+            isShortlisted
+              ? 'bg-amber-400 text-amber-950 scale-105 ring-2 ring-white'
+              : 'bg-white/90 text-slate-400 hover:text-amber-500 hover:bg-white backdrop-blur-xs'
+          }`}
+        >
+          {isShortlisted ? '★' : '☆'}
+        </button>
 
         <img
           src={imgSrc}
@@ -72,138 +84,148 @@ export default function ProductCard({
           loading="lazy"
           onError={handleImageError}
           className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
-          style={{
-            imageRendering: '-webkit-optimize-contrast',
-          }}
+          style={{ imageRendering: '-webkit-optimize-contrast' }}
         />
       </div>
 
-      {/* Card Details */}
-      <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
+      {/* 2. Tight, High-Density Information Area */}
+      <div className="p-2.5 flex-1 flex flex-col justify-between space-y-2">
         <div>
-          {/* Header Row: Style Code & Shortlist Star */}
-          <div className="flex justify-between items-start gap-2">
-            <div className="min-w-0">
-              <h3
-                className="font-bold text-slate-900 text-sm leading-tight truncate"
-                title={styleCode}
-              >
-                {styleCode}
-              </h3>
-              <span className="text-[10px] text-slate-400 font-medium">
-                📅 {item.DmCreatedDt || '-'}
-              </span>
-            </div>
+          {/* Card Header: Style Code + Stone Weight on Left, Date on Right */}
+  <div className="flex items-center justify-between gap-1 mb-1">
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className="font-bold text-slate-900 text-xs tracking-tight truncate">
+        {item.Dmcd || item.drcd}
+      </span>
+      {/* Stone Carats directly next to Style Number (only the value) */}
+      {(item.rm_stones_wt > 0 || item.DiaCts > 0) && (
+        <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1 py-0.2 rounded border border-slate-200 whitespace-nowrap">
+          {Number(item.rm_stones_wt || item.DiaCts || 0).toFixed(3)} CT
+        </span>
+      )}
+    </div>
+    <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
+      {item.DmCreatedDt || "-"}
+    </span>
+  </div>
+
+          {/* Badges: Category, Sales Categories, Size */}
+  <div className="flex flex-wrap gap-1 mt-1">
+    {item.DefaultSz && (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onBadgeClick?.('size', item.DefaultSz); }}
+        className={getBadgeClass('size', item.DefaultSz)}
+      >
+        Sz {item.DefaultSz}
+      </button>
+    )}
+    {item.DmctgDesc && (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onBadgeClick?.('category', item.DmctgDesc); }}
+        className={getBadgeClass('category', item.DmctgDesc)}
+      >
+        {item.DmctgDesc}
+      </button>
+    )}
+    {item.SalctgDesc && (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onBadgeClick?.('sales_cat1', item.SalctgDesc); }}
+        className={getBadgeClass('sales_cat1', item.SalctgDesc)}
+      >
+        {item.SalctgDesc}
+      </button>
+    )}
+    {item.SalctgDesc2 && (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onBadgeClick?.('sales_cat2', item.SalctgDesc2); }}
+        className={getBadgeClass('sales_cat2', item.SalctgDesc2)}
+      >
+        {item.SalctgDesc2}
+      </button>
+    )}
+  </div>
+
+  {/* Badges: Customer, Tone, Set Code */}
+  {(item.Customer || item.Tone || item.SetCd) && (
+    <div className="flex flex-wrap items-center gap-1 mt-1">
+      {item.Customer && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onBadgeClick?.('customer', item.Customer); }}
+          className={getBadgeClass('customer', item.Customer)}
+        >
+          Cust: {item.Customer}
+        </button>
+      )}
+      {item.Tone && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onBadgeClick?.('tone', item.Tone); }}
+          className={getBadgeClass('tone', item.Tone)}
+        >
+          Tone: {item.Tone}
+        </button>
+      )}
+      {item.SetCd && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onBadgeClick?.('set_cd', item.SetCd); }}
+          className={getBadgeClass('set_cd', item.SetCd)}
+        >
+          Set: {item.SetCd}
+        </button>
+      )}
+    </div>
+  )}
+        </div>
+
+        {/* 3. Specifications Strip: Metal | Total Wt | Wax Wt */}
+        <div className="grid grid-cols-3 divide-x divide-slate-200 bg-slate-50 py-1.5 px-1 rounded-md border border-slate-100 text-center">
+          <div className="px-1">
+            <span className="text-[9px] text-slate-400 block uppercase">Metal</span>
+            <span className="text-[10px] text-slate-800 font-bold block truncate" title={metalStr}>
+              {metalStr}
+            </span>
+          </div>
+          <div className="px-1">
+            <span className="text-[9px] text-slate-400 block uppercase">Total Wt</span>
+            <span className="text-[10px] text-slate-800 font-bold block">
+              {formatNumber(item.Totalwt)}g
+            </span>
+          </div>
+          <div className="px-1">
+            <span className="text-[9px] text-slate-400 block uppercase">
+              {item.wax_label || 'waxwt'}
+            </span>
+            <span className="text-[10px] text-slate-800 font-bold block">
+              {formatNumber(item.wax_value)}g
+            </span>
+          </div>
+        </div>
+
+          <div className="grid grid-cols-2 gap-1.5 pt-0.5">
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleShortlist(item);
-              }}
-              className={`shrink-0 text-[11px] px-2 py-0.5 rounded transition-colors ${
-                isShortlisted
-                  ? 'bg-amber-400 text-amber-950 font-bold shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-medium'
-              }`}
+              onClick={() => onOpenRmDetails(styleCode)}
+              className="w-full py-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 rounded-md transition-colors flex items-center justify-center gap-1 border border-indigo-100"
             >
-              {isShortlisted ? '★ Shortlisted' : '☆ Shortlist'}
+              💎 Stones ({item.rm_stones_qty || 0})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onOpenDesigners(item)}
+              className="w-full py-1 text-[11px] font-semibold text-purple-700 bg-purple-50/70 hover:bg-purple-100 rounded-md transition-colors flex items-center justify-center gap-1 border border-purple-100"
+            >
+              👤 Designers ▾
             </button>
           </div>
-
-          {/* Category Badges */}
-          <div className="flex flex-wrap gap-1 mt-2">
-            {item.DmctgDesc && (
-              <span
-                className="text-[10px] bg-indigo-50 text-indigo-700 font-semibold px-1.5 py-0.5 rounded border border-indigo-100 truncate max-w-[120px]"
-                title={`Category: ${item.DmctgDesc}`}
-              >
-                {item.DmctgDesc}
-              </span>
-            )}
-            {item.SalctgDesc && (
-              <span
-                className="text-[10px] bg-slate-100 text-slate-700 font-medium px-1.5 py-0.5 rounded truncate max-w-[120px]"
-                title={`Sales Cat 1: ${item.SalctgDesc}`}
-              >
-                {item.SalctgDesc}
-              </span>
-            )}
-            {item.SalctgDesc2 && (
-              <span
-                className="text-[10px] bg-slate-100 text-slate-600 font-medium px-1.5 py-0.5 rounded truncate max-w-[120px]"
-                title={`Sales Cat 2: ${item.SalctgDesc2}`}
-              >
-                {item.SalctgDesc2}
-              </span>
-            )}
-          </div>
-
-          {/* Customer, Brand, Tone, Set Code */}
-          <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px] text-slate-500 font-medium">
-            {item.Customer && (
-              <span className="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
-                Cust: {item.Customer}
-              </span>
-            )}
-            {item.Brand && (
-              <span className="bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
-                Collection: {item.Brand}
-              </span>
-            )}
-            {item.Tone && (
-              <span className="bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
-                Tone: {item.Tone}
-              </span>
-            )}
-            {item.SetCd && (
-              <span className="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">
-                Set: {item.SetCd}
-              </span>
-            )}
-          </div>
         </div>
-
-        {/* Specifications Matrix */}
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-          <div>
-            <span className="text-slate-400">Metal:</span>{' '}
-            <b className="text-slate-700 font-semibold">{metalStr}</b>
-          </div>
-          <div>
-            <span className="text-slate-400">Total Wt:</span>{' '}
-            <b className="text-slate-700 font-semibold">{formatNumber(item.Totalwt)}g</b>
-          </div>
-        </div>
-
-        {/* Raw Material Stones Breakdown Trigger */}
-        <div className="space-y-1.5 pt-0.5">
-          <div className="flex justify-between items-center text-[10px] text-slate-500 px-0.5">
-            <span>
-              Stones: <b className="text-slate-700">{formatNumber(item.rm_stones_wt)} CT</b>
-            </span>
-            <span className="truncate max-w-[130px]" title={stoneShapes}>
-              Shapes: <b className="text-slate-700">{stoneShapes}</b>
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 pt-1">
-        <button 
-          type="button" 
-          onClick={() => onOpenRmDetails(styleCode)} 
-          className="w-full py-1 text-[11px] font-semibold text-indigo-600 bg-indigo-50/70 hover:bg-indigo-100 rounded-md transition-colors flex items-center justify-center gap-1"
-        >
-          💎 Stones ({item.rm_stones_qty || 0})
-        </button>
-
-        <button 
-          type="button" 
-          onClick={() => onOpenDesigners(item)} 
-          className="w-full py-1 text-[11px] font-semibold text-purple-600 bg-purple-50/70 hover:bg-purple-100 rounded-md transition-colors flex items-center justify-center gap-1"
-        >
-          👤 Designers ▾
-        </button>
       </div>
-      </div>
-    </div>
-    </div>
+    
   );
 }

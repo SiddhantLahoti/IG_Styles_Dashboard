@@ -8,7 +8,7 @@ function buildQueryParams(filters, page = 1, pageSize = 24, search = '') {
 
   // Range & single inputs
   const singleFields = [
-    'start_date', 'end_date', 'min_total_wt', 'max_total_wt',
+    'start_date', 'end_date', 'min_total_wt', 'max_total_wt','min_wax_wt', 'max_wax_wt',
     'ln1', 'ln2', 'min_rm_wt', 'max_rm_wt', 'lab_grown','image_source', 'sieve_match_mode'
   ];
 
@@ -29,6 +29,7 @@ function buildQueryParams(filters, page = 1, pageSize = 24, search = '') {
     { key: 'metal', queryKey: 'metal' },
     { key: 'color', queryKey: 'color' },
     { key: 'set_cd', queryKey: 'set_cd' },
+    { key: 'size', queryKey: 'size' },
     { key: 'concept_by', queryKey: 'concept_by' },
     { key: 'creative_by', queryKey: 'creative_by' },
     { key: 'weight_by', queryKey: 'weight_by' },
@@ -52,9 +53,10 @@ export async function getSyncStatus() {
   return res.json();
 }
 
-// 2. Filter Dropdown Options
-export async function getFilterOptions() {
-  const res = await fetch('/api/filters');
+// 2. Filter Dropdown Options (Supports dynamic cascading parameters)
+export async function getFilterOptions(filters = {}, search = '') {
+  const query = buildQueryParams(filters, null, null, search);
+  const res = await fetch(`/api/filters${query ? `?${query}` : ''}`);
   if (!res.ok) throw new Error('Failed to fetch filter options');
   return res.json();
 }

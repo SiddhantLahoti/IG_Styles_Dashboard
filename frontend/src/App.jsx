@@ -31,9 +31,12 @@ const initialFilters = {
   metal: [],
   color: [],
   set_cd: [],
+  size: [],
   concept_by: [],
   creative_by:[],
   weight_by: [],
+  min_wax_wt: '',          
+  max_wax_wt: '',
   start_date: '',
   end_date: '',
   min_total_wt: '',
@@ -80,6 +83,7 @@ export default function App() {
   });
 
   const [designerItem, setDesignerItem] = useState(null);
+  const [isShortlistingAll, setIsShortlistingAll] = useState(false);
 
   // Debounce search input by 300ms
   useEffect(() => {
@@ -90,13 +94,14 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Load initial dropdown options once backend is ready
+  // Load initial and dynamic cascading dropdown options
   useEffect(() => {
     if (!isBackendReady) return;
-    getFilterOptions()
+
+    getFilterOptions(filters, debouncedSearch)
       .then((opts) => setFilterOptions(opts || {}))
       .catch((err) => console.error('Failed to load filter options:', err));
-  }, [isBackendReady]);
+  }, [isBackendReady, filters, debouncedSearch]);
 
   // Fetch products for "Explore" tab
   const fetchExploreProducts = useCallback(async () => {
@@ -125,7 +130,6 @@ export default function App() {
 
       const startIdx = (validPage - 1) * pageSize;
       const pageItems = allShortlisted.slice(startIdx, startIdx + pageSize);
-
       setProducts(pageItems);
       setTotalItems(total);
       setTotalPages(pages);
@@ -139,6 +143,28 @@ export default function App() {
   const handleFilterChange = (field, value) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
     setCurrentPage(1);
+  };
+
+ const handleBadgeClick = (filterKey, value) => {
+    if (!value || value === '-') return;
+
+    setFilters((prev) => {
+      const currentList = Array.isArray(prev[filterKey]) ? prev[filterKey] : [];
+      
+      // If already active, toggle it OFF (remove it)
+      if (currentList.includes(value)) {
+        return {
+          ...prev,
+          [filterKey]: currentList.filter((item) => item !== value)
+        };
+      }
+      
+      // If not active, toggle it ON (append it)
+      return {
+        ...prev,
+        [filterKey]: [...currentList, value]
+      };
+    });
   };
 
   const handleResetFilters = () => {
@@ -162,6 +188,7 @@ export default function App() {
   };
 
   const handleShortlistAllFiltered = async () => {
+    setIsShortlistingAll(true);
     setShortlistAllBtnText('⏳ Adding all matching items...');
     try {
       const res = await getAllFilteredProducts(filters, debouncedSearch);
@@ -178,6 +205,7 @@ export default function App() {
       alert('Failed to shortlist all items: ' + e.message);
       setShortlistAllBtnText('⭐ Shortlist All Filtered Results');
     } finally {
+      setIsShortlistingAll(false);
       setTimeout(() => {
         setShortlistAllBtnText('⭐ Shortlist All Filtered Results');
       }, 2000);
@@ -274,6 +302,9 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         onSync={handleSyncExcel}
         isSyncing={isSyncing}
+        totalItems={totalItems}                              
+        onShortlistAllFiltered={handleShortlistAllFiltered}  
+        isShortlistingAll={isShortlistingAll}
       />
 
       {/* Main Container */}
@@ -302,7 +333,9 @@ export default function App() {
           activeTab={activeTab}
           shortlistedMap={shortlistedMap}
           cataloguePerRow={cataloguePerRow}
+          filters={filters}
           onOpenDesigners={(item) => setDesignerItem(item)}
+          onBadgeClick={handleBadgeClick}
           setCataloguePerRow={setCataloguePerRow}
           onPageChange={(page) => {
             setCurrentPage(page);
