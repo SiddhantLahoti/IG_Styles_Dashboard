@@ -31,6 +31,7 @@ const initialFilters = {
   metal: [],
   color: [],
   set_cd: [],
+  has_set: false,
   size: [],
   concept_by: [],
   creative_by:[],

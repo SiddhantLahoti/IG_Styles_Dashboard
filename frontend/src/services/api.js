@@ -18,6 +18,11 @@ function buildQueryParams(filters, page = 1, pageSize = 24, search = '') {
     }
   });
 
+  // Handle 'Part of a Set' boolean checkbox
+  if (filters.has_set) {
+    params.append('has_set', 'true');
+  }
+
   // Multi-select dropdown arrays
   const arrayFields = [
     { key: 'category', queryKey: 'category' },

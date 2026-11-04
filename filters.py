@@ -30,6 +30,7 @@ def _build_where_clause(
     metals: Optional[List[str]] = None,
     colors: Optional[List[str]] = None,
     set_codes: Optional[List[str]] = None,
+    has_set: Optional[bool] = None,
     sizes: Optional[List[str]] = None,
     concept_designers: Optional[List[str]] = None,
     creative_designers: Optional[List[str]] = None,
@@ -92,6 +93,14 @@ def _build_where_clause(
             where_clauses.append(f"{col_name} IN ({placeholders})")
             params.extend(val_list)
 
+    # Has Set Code (Part of a Set)
+    if has_set:
+        where_clauses.append(f"({COL_SET_CD} IS NOT NULL AND {COL_SET_CD} != '' AND {COL_SET_CD} != '-')")
+    elif set_codes and exclude_dim != "set_codes":
+        placeholders = ",".join(["?"] * len(set_codes))
+        where_clauses.append(f"{COL_SET_CD} IN ({placeholders})")
+        params.extend(set_codes)
+        
     # Designers
     if concept_designers and exclude_dim != "concept_designers":
         p = ",".join(["?"] * len(concept_designers))
@@ -214,6 +223,7 @@ def apply_filters_and_paginate(
     sales_cat2: Optional[List[str]] = None,
     brands: Optional[List[str]] = None,
     tones: Optional[List[str]] = None,
+    has_set: Optional[bool] = None,
     customers: Optional[List[str]] = None,
     metals: Optional[List[str]] = None,
     colors: Optional[List[str]] = None,
@@ -244,7 +254,7 @@ def apply_filters_and_paginate(
         search_query=search_query, lab_grown=lab_grown, image_source=image_source,
         sieve_match_mode=sieve_match_mode, categories=categories, sales_cat1=sales_cat1,
         sales_cat2=sales_cat2, brands=brands, tones=tones, customers=customers,
-        metals=metals, colors=colors, set_codes=set_codes, sizes=sizes,
+        metals=metals, colors=colors, set_codes=set_codes,has_set=has_set, sizes=sizes,
         concept_designers=concept_designers, creative_designers=creative_designers,
         weight_designers=weight_designers, start_date=start_date, end_date=end_date,
         min_total_wt=min_total_wt, max_total_wt=max_total_wt, min_wax_wt=min_wax_wt,
@@ -326,6 +336,7 @@ def get_cascading_filter_options(
     sales_cat2: Optional[List[str]] = None,
     brands: Optional[List[str]] = None,
     tones: Optional[List[str]] = None,
+    has_set: Optional[bool] = None,
     customers: Optional[List[str]] = None,
     metals: Optional[List[str]] = None,
     colors: Optional[List[str]] = None,
@@ -355,7 +366,7 @@ def get_cascading_filter_options(
             search_query=search_query, lab_grown=lab_grown, image_source=image_source,
             sieve_match_mode=sieve_match_mode, categories=categories, sales_cat1=sales_cat1,
             sales_cat2=sales_cat2, brands=brands, tones=tones, customers=customers,
-            metals=metals, colors=colors, set_codes=set_codes, sizes=sizes,
+            metals=metals, colors=colors, set_codes=set_codes,has_set=has_set, sizes=sizes,
             concept_designers=concept_designers, creative_designers=creative_designers,
             weight_designers=weight_designers, start_date=start_date, end_date=end_date,
             min_total_wt=min_total_wt, max_total_wt=max_total_wt, min_wax_wt=min_wax_wt,

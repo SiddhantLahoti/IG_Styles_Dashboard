@@ -2,6 +2,8 @@ import os
 import sqlite3
 import pandas as pd
 from threading import Lock
+import sys
+import time
 from config import (
     BASE_DIR, DB_PATH, EXCEL_FILE_A, EXCEL_FILE_B,
     COL_STYLE, COL_CTG_DESC, COL_SAL_CTG1, COL_SAL_CTG2,
@@ -15,7 +17,99 @@ from config import (
 _filter_options_cache = {}
 _lock = Lock()
 
+def refresh_excel_file_via_app(filepath: str, timeout_seconds: int = 180) -> bool:
+    """
+    Launches background Microsoft Excel via Windows COM, triggers 'Data -> Refresh All'
+    (to fetch updated rows from external SQL/ODBC queries), waits for completion,
+    saves the workbook, and closes Excel cleanly.
+    """
+    if not os.path.exists(filepath):
+        print(f"[ERROR] Excel file not found for refresh: {filepath}")
+        return False
 
+    abs_path = os.path.abspath(filepath)
+    print(f"[INFO] Launching Excel COM automation to refresh: {abs_path}")
+
+    # pywin32 is Windows-only
+    if sys.platform != "win32":
+        print("[WARNING] Background Excel COM refresh is only supported on Windows.")
+        return False
+
+    try:
+        import pythoncom
+        import win32com.client
+    except ImportError:
+        print("[ERROR] 'pywin32' is not installed. Run: pip install pywin32")
+        return False
+
+    # Initialize COM library for the current thread (required when running inside FastAPI/background threads)
+    pythoncom.CoInitialize()
+    excel = None
+    wb = None
+
+    try:
+        # Launch Excel invisibly in background
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        excel.ScreenUpdating = False
+
+        # Open workbook (read_only=False to allow saving refreshed data)
+        wb = excel.Workbooks.Open(abs_path, ReadOnly=False)
+
+        # Trigger Data -> Refresh All (fetches new rows from SQL/ODBC)
+        wb.RefreshAll()
+
+        # Wait for all background data connections to complete fetching
+        excel.CalculateUntilAsyncQueriesDone()
+
+        # Wait up to timeout_seconds while checking connection refresh status
+        start_time = time.time()
+        while time.time() - start_time < timeout_seconds:
+            still_refreshing = False
+            for conn in wb.Connections:
+                try:
+                    if conn.OLEDBConnection and conn.OLEDBConnection.Refreshing:
+                        still_refreshing = True
+                        break
+                except Exception:
+                    pass
+                try:
+                    if conn.ODBCConnection and conn.ODBCConnection.Refreshing:
+                        still_refreshing = True
+                        break
+                except Exception:
+                    pass
+
+            if not still_refreshing:
+                break
+            time.sleep(1)
+
+        # Save and close the workbook
+        wb.Save()
+        wb.Close(SaveChanges=True)
+        print(f"[SUCCESS] Excel refresh completed and saved: {abs_path}")
+        return True
+
+    except Exception as e:
+        print(f"[ERROR] Failed during Excel background refresh for {abs_path}: {e}")
+        if wb:
+            try:
+                wb.Close(SaveChanges=False)
+            except Exception:
+                pass
+        return False
+
+    finally:
+        if excel:
+            try:
+                excel.Quit()
+            except Exception:
+                pass
+        # Uninitialize COM for the thread
+        pythoncom.CoUninitialize()
+        
+        
 def get_db_connection() -> sqlite3.Connection:
     """Provides a thread-safe connection with WAL mode and row factory."""
     conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
@@ -168,6 +262,10 @@ def load_data(force_reload: bool = False):
     global _filter_options_cache
 
     with _lock:
+        if force_reload:
+            print("[INFO] Triggering Excel SQL refresh (Data -> Refresh All)...")
+            refresh_excel_file_via_app(EXCEL_FILE_A)
+            refresh_excel_file_via_app(EXCEL_FILE_B)
         mtime_a = os.path.getmtime(EXCEL_FILE_A) if os.path.exists(EXCEL_FILE_A) else 0
         mtime_b = os.path.getmtime(EXCEL_FILE_B) if os.path.exists(EXCEL_FILE_B) else 0
         db_mtime = os.path.getmtime(DB_PATH) if os.path.exists(DB_PATH) else 0

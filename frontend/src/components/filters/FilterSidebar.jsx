@@ -87,6 +87,25 @@ export default function FilterSidebar({
         </div>
       </div>
 
+{/* Creation Date Range */}
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Creation Date</label>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            value={filters.start_date || ''}
+            onChange={(e) => onFilterChange('start_date', e.target.value)}
+            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <input
+            type="date"
+            value={filters.end_date || ''}
+            onChange={(e) => onFilterChange('end_date', e.target.value)}
+            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
 
       {/* File A Filters */}
       <MultiSelectDropdown
@@ -120,160 +139,15 @@ export default function FilterSidebar({
         selected={filters.brand || []}
         onChange={(val) => onFilterChange('brand', val)}
       />
-
-      <MultiSelectDropdown
-        label="Tone"
-        defaultLabel="All Tones"
-        options={options.tones || []}
-        selected={filters.tone || []}
-        onChange={(val) => onFilterChange('tone', val)}
-      />
-
-      <MultiSelectDropdown
-        label="Set Code"
-        defaultLabel="All Set Codes"
-        options={options.set_codes || []}
-        selected={filters.set_cd || []}
-        onChange={(val) => onFilterChange('set_cd', val)}
-      />
-
-      <MultiSelectDropdown
-        label="Customer"
-        defaultLabel="All Customers"
-        options={options.customers || []}
-        selected={filters.customer || []}
-        onChange={(val) => onFilterChange('customer', val)}
-      />
-
-      {/* Metal & Color Grid */}
-      <div className="grid grid-cols-2 gap-2">
-        <MultiSelectDropdown
-          label="Metal"
-          defaultLabel="All"
-          maxHeightClass="max-h-36"
-          options={options.metals || []}
-          selected={filters.metal || []}
-          onChange={(val) => onFilterChange('metal', val)}
-        />
-        <MultiSelectDropdown
-          label="Color"
-          defaultLabel="All"
-          maxHeightClass="max-h-36"
-          options={options.colors || []}
-          selected={filters.color || []}
-          onChange={(val) => onFilterChange('color', val)}
-        />
-      </div>
-
-          <MultiSelectDropdown
-        label="Size"
-        defaultLabel="All Sizes"
-        maxHeightClass="max-h-40"
-        options={options.sizes || []}
-        selected={filters.size || []}
-        onChange={(val) => onFilterChange('size', val)}
-      />
-
-      <MultiSelectDropdown
-        label="Concept Designer"
-        defaultLabel="All Concept By"
-        options={options.concept_designers || []}
-        selected={filters.concept_by || []}
-        onChange={(val) => onFilterChange('concept_by', val)}
-      />
-
-      <MultiSelectDropdown
-        label="Creative Designer"
-        defaultLabel="All Creative By"
-        options={options.creative_designers || []}
-        selected={filters.creative_by || []}
-        onChange={(val) => onFilterChange('creative_by', val)}
-      />
-
-      <MultiSelectDropdown
-        label="Weight Designer"
-        defaultLabel="All Weight By"
-        options={options.weight_designers || []}
-        selected={filters.weight_by || []}
-        onChange={(val) => onFilterChange('weight_by', val)}
-      />
-
-      {/* Creation Date Range */}
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Creation Date</label>
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            type="date"
-            value={filters.start_date || ''}
-            onChange={(e) => onFilterChange('start_date', e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
-          <input
-            type="date"
-            value={filters.end_date || ''}
-            onChange={(e) => onFilterChange('end_date', e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
-        </div>
-      </div>
-
-      {/* Total Weight Min/Max */}
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Total Weight (g)</label>
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            type="number"
-            step="0.001"
-            placeholder="Min"
-            value={filters.min_total_wt ?? ''}
-            onChange={(e) => onFilterChange('min_total_wt', e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
-          <input
-            type="number"
-            step="0.001"
-            placeholder="Max"
-            value={filters.max_total_wt ?? ''}
-            onChange={(e) => onFilterChange('max_total_wt', e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
-        </div>
-      </div>
-
-      {/* Wax Weight Min/Max */}
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Wax Weight (g)</label>
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            type="number"
-            step="0.001"
-            placeholder="Min"
-            value={filters.min_wax_wt ?? ''}
-            onChange={(e) => onFilterChange('min_wax_wt', e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
-          <input
-            type="number"
-            step="0.001"
-            placeholder="Max"
-            value={filters.max_wax_wt ?? ''}
-            onChange={(e) => onFilterChange('max_wax_wt', e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
-        </div>
-      </div>
-
-      
-
       {/* File B Raw Material Divider */}
       <div className="pt-3 border-t border-slate-200">
         <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block mb-2">
-          💎 Stones & Raw Materials
+          💎 Raw Materials
         </span>
       </div>
 
       <MultiSelectDropdown
-        label="Stone Type (Ctg)"
+        label="Primary Raw Material"
         defaultLabel="All Types"
         maxHeightClass="max-h-36"
         options={options.rm_categories || []}
@@ -282,7 +156,7 @@ export default function FilterSidebar({
       />
 
       <MultiSelectDropdown
-        label="Stone Shape (SubCtg)"
+        label="Raw Material Sub Category"
         defaultLabel="All Shapes"
         options={options.rm_subcategories || []}
         selected={filters.rm_subcategory || []}
@@ -381,6 +255,163 @@ export default function FilterSidebar({
           />
         </div>
       </div>
+
+      {/* Metal & Color Grid */}
+      <div className="grid grid-cols-2 gap-2">
+        <MultiSelectDropdown
+          label="Metal"
+          defaultLabel="All"
+          maxHeightClass="max-h-36"
+          options={options.metals || []}
+          selected={filters.metal || []}
+          onChange={(val) => onFilterChange('metal', val)}
+        />
+        <MultiSelectDropdown
+          label="Color"
+          defaultLabel="All"
+          maxHeightClass="max-h-36"
+          options={options.colors || []}
+          selected={filters.color || []}
+          onChange={(val) => onFilterChange('color', val)}
+        />
+      </div>
+
+      <MultiSelectDropdown
+        label="Tone"
+        defaultLabel="All Tones"
+        options={options.tones || []}
+        selected={filters.tone || []}
+        onChange={(val) => onFilterChange('tone', val)}
+      />
+
+      {/* Set Code Section with 'Part of a Set' Checkbox */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between px-0.5">
+          <label className="text-xs font-semibold text-slate-700">Set Code</label>
+          <label className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={Boolean(filters.has_set)}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                onFilterChange('has_set', checked);
+                if (checked) {
+                  // Clear specific set codes if user selects 'Part of a set'
+                  onFilterChange('set_cd', []);
+                }
+              }}
+              className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+            />
+            Part of a set
+          </label>
+        </div>
+
+        {/* Multi-Select Dropdown: Dimmed when 'Part of a set' is active */}
+        <div className={filters.has_set ? 'opacity-40 pointer-events-none' : ''}>
+          <MultiSelectDropdown
+            label=""
+            defaultLabel={filters.has_set ? "All Set Codes (Any)" : "All Set Codes"}
+            options={options.set_codes || []}
+            selected={filters.set_cd || []}
+            onChange={(val) => onFilterChange('set_cd', val)}
+          />
+        </div>
+      </div>
+
+      <MultiSelectDropdown
+        label="Customer"
+        defaultLabel="All Customers"
+        options={options.customers || []}
+        selected={filters.customer || []}
+        onChange={(val) => onFilterChange('customer', val)}
+      />
+
+      
+
+          <MultiSelectDropdown
+        label="Model Size"
+        defaultLabel="All Sizes"
+        maxHeightClass="max-h-40"
+        options={options.sizes || []}
+        selected={filters.size || []}
+        onChange={(val) => onFilterChange('size', val)}
+      />
+
+      <MultiSelectDropdown
+        label="Concept Designer"
+        defaultLabel="All Concept By"
+        options={options.concept_designers || []}
+        selected={filters.concept_by || []}
+        onChange={(val) => onFilterChange('concept_by', val)}
+      />
+
+      <MultiSelectDropdown
+        label="Creative Designer"
+        defaultLabel="All Creative By"
+        options={options.creative_designers || []}
+        selected={filters.creative_by || []}
+        onChange={(val) => onFilterChange('creative_by', val)}
+      />
+
+      <MultiSelectDropdown
+        label="Weight Designer"
+        defaultLabel="All Weight By"
+        options={options.weight_designers || []}
+        selected={filters.weight_by || []}
+        onChange={(val) => onFilterChange('weight_by', val)}
+      />
+
+      
+
+      {/* Total Weight Min/Max */}
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Total Weight (g)</label>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="number"
+            step="0.001"
+            placeholder="Min"
+            value={filters.min_total_wt ?? ''}
+            onChange={(e) => onFilterChange('min_total_wt', e.target.value)}
+            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <input
+            type="number"
+            step="0.001"
+            placeholder="Max"
+            value={filters.max_total_wt ?? ''}
+            onChange={(e) => onFilterChange('max_total_wt', e.target.value)}
+            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
+      {/* Wax Weight Min/Max */}
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Wax Weight (g)</label>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="number"
+            step="0.001"
+            placeholder="Min"
+            value={filters.min_wax_wt ?? ''}
+            onChange={(e) => onFilterChange('min_wax_wt', e.target.value)}
+            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <input
+            type="number"
+            step="0.001"
+            placeholder="Max"
+            value={filters.max_wax_wt ?? ''}
+            onChange={(e) => onFilterChange('max_wax_wt', e.target.value)}
+            className="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
+      
+
+      
     </aside>
   );
 }

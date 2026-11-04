@@ -17,6 +17,6 @@ echo [2/3] Launching Browser...
 start "" cmd /c "timeout /t 2 >nul && start http://127.0.0.1:8001"
 
 echo [3/3] Starting FastAPI Backend on Port 8001...
-"..\Milli_maam_excel_dashboard\python-embed\python.exe" -m uvicorn app:app --host 0.0.0.0 --port 8001 
+".\python-embed\python.exe" -m uvicorn app:app --host 0.0.0.0 --port 8001 
 
 pause

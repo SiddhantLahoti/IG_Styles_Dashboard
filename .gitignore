@@ -5,7 +5,8 @@ __pycache__/
 *.so
 
 python-embed
-
+catalog.db
+*.db
 # Virtual Environment
 venv/
 env/
