@@ -151,11 +151,24 @@ def _build_where_clause(
             params.extend(rm_categories)
 
         if rm_subcategories and exclude_dim != "rm_subcategories":
-            p = ",".join(["?"] * len(rm_subcategories))
+            sub_clauses = []
+            for item in rm_subcategories:
+                if " : " in item:
+                    # Item is in composite format: "OVAL : D" -> Shape: OVAL, Stone Category: D
+                    parts = item.split(" : ")
+                    shape_val = parts[0].strip()
+                    ctg_val = parts[1].strip()
+                    sub_clauses.append(f"({COL_RM_SUBCTG} = ? AND {COL_RM_CTG} = ?)")
+                    params.extend([shape_val, ctg_val])
+                else:
+                    # Fallback for plain shape string
+                    sub_clauses.append(f"({COL_RM_SUBCTG} = ?)")
+                    params.append(item.strip())
+
+            combined_cond = " OR ".join(sub_clauses)
             where_clauses.append(f"""{COL_STYLE} IN (
-                SELECT DISTINCT {COL_RM_DSG} FROM stone_items WHERE {COL_RM_SUBCTG} IN ({p})
+                SELECT DISTINCT {COL_RM_DSG} FROM stone_items WHERE ({combined_cond})
             )""")
-            params.extend(rm_subcategories)
 
         # Sieve and stone weight constraints
         has_numeric = any([ln1 is not None, ln2 is not None, min_rm_wt is not None, max_rm_wt is not None])
@@ -402,23 +415,48 @@ def get_cascading_filter_options(
     creative_res = get_dim_uniques(COL_CREAT_BY_DESC, "creative_designers")
     weight_res = get_dim_uniques(COL_WET_BY_DESC, "weight_designers")
 
-    # Cascading Stone Types & Shapes
-    # 1. Stone Shapes available for the current stone types
+    # Cascading Stone Types & Shapes (Queried from lightweight stone_shape_categories table)
+    # 1. Stone Shapes available for the current stone types, paired as "SHAPE : CTG"
     if rm_categories:
         p = ",".join(["?"] * len(rm_categories))
-        cur.execute(f"SELECT DISTINCT {COL_RM_SUBCTG} FROM stone_items WHERE {COL_RM_CTG} IN ({p}) AND {COL_RM_SUBCTG} != '' ORDER BY {COL_RM_SUBCTG} ASC;", rm_categories)
-        rm_subcategories_res = [r[0] for r in cur.fetchall()]
+        cur.execute(
+            f"SELECT subctg, ctg FROM stone_shape_categories "
+            f"WHERE ctg IN ({p}) "
+            f"ORDER BY subctg ASC, ctg ASC;",
+            rm_categories
+        )
     else:
-        cur.execute(f"SELECT DISTINCT {COL_RM_SUBCTG} FROM stone_items WHERE {COL_RM_SUBCTG} != '' ORDER BY {COL_RM_SUBCTG} ASC;")
-        rm_subcategories_res = [r[0] for r in cur.fetchall()]
+        cur.execute(
+            "SELECT subctg, ctg FROM stone_shape_categories "
+            "ORDER BY subctg ASC, ctg ASC;"
+        )
+    rm_subcategories_res = [f"{r[0]} : {r[1]}" for r in cur.fetchall()]
 
     # 2. Stone Types available for the current stone shapes
     if rm_subcategories:
-        p = ",".join(["?"] * len(rm_subcategories))
-        cur.execute(f"SELECT DISTINCT {COL_RM_CTG} FROM stone_items WHERE {COL_RM_SUBCTG} IN ({p}) AND {COL_RM_CTG} != '' ORDER BY {COL_RM_CTG} ASC;", rm_subcategories)
+        sub_clauses = []
+        p_params = []
+        for item in rm_subcategories:
+            if " : " in item:
+                parts = item.split(" : ")
+                sub_clauses.append("(subctg = ? AND ctg = ?)")
+                p_params.extend([parts[0].strip(), parts[1].strip()])
+            else:
+                sub_clauses.append("(subctg = ?)")
+                p_params.append(item.strip())
+
+        cur.execute(
+            f"SELECT DISTINCT ctg FROM stone_shape_categories "
+            f"WHERE {' OR '.join(sub_clauses)} "
+            f"ORDER BY ctg ASC;",
+            p_params
+        )
         rm_categories_res = [r[0] for r in cur.fetchall()]
     else:
-        cur.execute(f"SELECT DISTINCT {COL_RM_CTG} FROM stone_items WHERE {COL_RM_CTG} != '' ORDER BY {COL_RM_CTG} ASC;")
+        cur.execute(
+            "SELECT DISTINCT ctg FROM stone_shape_categories "
+            "ORDER BY ctg ASC;"
+        )
         rm_categories_res = [r[0] for r in cur.fetchall()]
 
     conn.close()

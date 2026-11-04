@@ -213,7 +213,7 @@ export default function ProductCard({
               onClick={() => onOpenRmDetails(styleCode)}
               className="w-full py-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 rounded-md transition-colors flex items-center justify-center gap-1 border border-indigo-100"
             >
-              💎 Stones ({item.rm_stones_qty || 0})
+              💎 RM Details ({item.rm_stones_qty || 0})
             </button>
 
             <button

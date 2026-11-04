@@ -142,7 +142,21 @@ export default function App() {
 
   // Handlers
   const handleFilterChange = (field, value) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
+    setFilters((prev) => {
+      const nextFilters = { ...prev, [field]: value };
+
+      // If stone type (rm_category) changes, remove shapes that belong to unchecked categories
+      if (field === 'rm_category' && Array.isArray(value) && value.length > 0) {
+        const currentShapes = Array.isArray(prev.rm_subcategory) ? prev.rm_subcategory : [];
+        nextFilters.rm_subcategory = currentShapes.filter((shapeStr) => {
+          if (!shapeStr.includes(' : ')) return true;
+          const ctg = shapeStr.split(' : ')[1]?.trim();
+          return value.includes(ctg);
+        });
+      }
+
+      return nextFilters;
+    });
     setCurrentPage(1);
   };
 

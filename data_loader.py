@@ -252,6 +252,26 @@ def build_sqlite_database():
         ]
         for sql in indexes:
             conn.execute(sql)
+        # Create and populate pre-aggregated stone shape & category lookup table
+        print("[INFO] Creating pre-aggregated stone_shape_categories lookup table...")
+        conn.execute("DROP TABLE IF EXISTS stone_shape_categories;")
+        conn.execute("""
+            CREATE TABLE stone_shape_categories (
+                ctg TEXT NOT NULL,
+                subctg TEXT NOT NULL,
+                PRIMARY KEY (subctg, ctg)
+            );
+        """)
+
+        conn.execute(f"""
+            INSERT OR IGNORE INTO stone_shape_categories (ctg, subctg)
+            SELECT DISTINCT {COL_RM_CTG}, {COL_RM_SUBCTG}
+            FROM stone_items
+            WHERE {COL_RM_CTG} IS NOT NULL AND {COL_RM_CTG} != ''
+              AND {COL_RM_SUBCTG} IS NOT NULL AND {COL_RM_SUBCTG} != '' AND {COL_RM_SUBCTG} != '-';
+        """)
+
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ssc_ctg ON stone_shape_categories (ctg);")
 
     conn.close()
     print("[INFO] Database build complete!")

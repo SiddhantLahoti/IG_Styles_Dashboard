@@ -31,6 +31,11 @@ export default function MultiSelectDropdown({
     }
   };
 
+  const handleClearAll = (e) => {
+    e.stopPropagation();
+    onChange([]);
+  };
+
   const filteredOptions = options.filter((opt) =>
     String(opt).toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -54,8 +59,20 @@ export default function MultiSelectDropdown({
         >
           {count === 0 ? defaultLabel : `${count} selected`}
         </span>
-        <span className="text-[10px] text-slate-400">▼</span>
-      </button>
+<div className="flex items-center gap-1.5 ml-1 shrink-0">
+          {count > 0 && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={handleClearAll}
+              title="Clear all"
+              className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 font-bold cursor-pointer transition-colors"
+            >
+              ✕
+            </span>
+          )}
+          <span className="text-[10px] text-slate-400">▼</span>
+        </div>      </button>
 
       {/* Dropdown Popover */}
       {isOpen && (
