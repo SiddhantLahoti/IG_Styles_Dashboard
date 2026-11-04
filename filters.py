@@ -270,15 +270,25 @@ def apply_filters_and_paginate(
     page = max(1, min(page, total_pages))
     offset = (page - 1) * page_size
 
-    # 2. Dynamic Sorting
-    if min_wax_wt is not None or max_wax_wt is not None:
-        order_sql = "ORDER BY wax_value ASC"
-    elif min_total_wt is not None or max_total_wt is not None:
-        order_sql = f"ORDER BY {COL_TOTAL_WT} ASC"
-    elif min_rm_wt is not None or max_rm_wt is not None:
-        order_sql = "ORDER BY rm_stones_wt ASC"
+    # 2. Dynamic Sorting: Cluster matching sets together if set filtering is active
+    if has_set or set_codes:
+        if min_wax_wt is not None or max_wax_wt is not None:
+            order_sql = f"ORDER BY {COL_SET_CD} ASC, wax_value ASC"
+        elif min_total_wt is not None or max_total_wt is not None:
+            order_sql = f"ORDER BY {COL_SET_CD} ASC, {COL_TOTAL_WT} ASC"
+        elif min_rm_wt is not None or max_rm_wt is not None:
+            order_sql = f"ORDER BY {COL_SET_CD} ASC, rm_stones_wt ASC"
+        else:
+            order_sql = f"ORDER BY {COL_SET_CD} ASC, {COL_CTG_DESC} ASC, created_date_str DESC"
     else:
-        order_sql = "ORDER BY created_date_str DESC"
+        if min_wax_wt is not None or max_wax_wt is not None:
+            order_sql = "ORDER BY wax_value ASC"
+        elif min_total_wt is not None or max_total_wt is not None:
+            order_sql = f"ORDER BY {COL_TOTAL_WT} ASC"
+        elif min_rm_wt is not None or max_rm_wt is not None:
+            order_sql = "ORDER BY rm_stones_wt ASC"
+        else:
+            order_sql = "ORDER BY created_date_str DESC"
 
     # 3. Retrieve Page Items
     query = f"""

@@ -264,8 +264,8 @@ def load_data(force_reload: bool = False):
     with _lock:
         if force_reload:
             print("[INFO] Triggering Excel SQL refresh (Data -> Refresh All)...")
-            refresh_excel_file_via_app(EXCEL_FILE_A)
-            refresh_excel_file_via_app(EXCEL_FILE_B)
+            # refresh_excel_file_via_app(EXCEL_FILE_A)
+            # refresh_excel_file_via_app(EXCEL_FILE_B)
         mtime_a = os.path.getmtime(EXCEL_FILE_A) if os.path.exists(EXCEL_FILE_A) else 0
         mtime_b = os.path.getmtime(EXCEL_FILE_B) if os.path.exists(EXCEL_FILE_B) else 0
         db_mtime = os.path.getmtime(DB_PATH) if os.path.exists(DB_PATH) else 0
