@@ -74,8 +74,7 @@ export default function App() {
   const [cataloguePerRow, setCataloguePerRow] = useState(4);
 
   // Modals state
-  const [zoomCode, setZoomCode] = useState(null);
-  const [rmCode, setRmCode] = useState(null);
+  const [zoomItem, setZoomItem] = useState(null);  const [rmCode, setRmCode] = useState(null);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [exportModal, setExportModal] = useState({
     isOpen: false,
@@ -362,8 +361,7 @@ export default function App() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           onToggleShortlist={handleToggleShortlist}
-          onOpenZoom={(code) => setZoomCode(code)}
-          onOpenRmDetails={(code) => setRmCode(code)}
+          onOpenZoom={(item) => setZoomItem(item)}          onOpenRmDetails={(code) => setRmCode(code)}
           onExportRowWise={() => runExport('row')}
           onExportCatalogue={() => runExport('catalogue', cataloguePerRow)}
           onOpenClearConfirm={() => {
@@ -374,10 +372,10 @@ export default function App() {
 
       {/* Modals */}
       <ImageZoomModal
-        isOpen={Boolean(zoomCode)}
-        styleCode={zoomCode}
-        onClose={() => setZoomCode(null)}
-      />
+     isOpen={Boolean(zoomItem)}
+     item={zoomItem}
+     onClose={() => setZoomItem(null)}
+   />
 
       <StoneBreakdownModal
         isOpen={Boolean(rmCode)}

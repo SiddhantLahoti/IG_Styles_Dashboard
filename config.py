@@ -9,6 +9,7 @@ EXCEL_FILE_B = os.path.join(BASE_DIR, "Design Rm Detail_v3.xlsx")
 # --- Image Folder Paths (Keep your actual paths) ---
 PRIMARY_IMG_DIR = r"Y:\\"
 FALLBACK_IMG_DIR = r"Z:\LD"
+CAD_IMG_DIR = r"X:\CAD-JPG"
 IMAGE_CACHE_DIR = os.path.join(BASE_DIR, ".cache_images")
 
 # 2. File A Column Definitions (Master Styles)

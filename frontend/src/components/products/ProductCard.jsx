@@ -57,9 +57,45 @@ export default function ProductCard({
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
       {/* 1. Image Thumbnail with Floating Badges & Shortlist Button */}
       <div
-        onClick={() => onOpenZoom(styleCode)}
+        onClick={() => onOpenZoom(item)}
         className="relative h-44 bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-100 p-2 cursor-pointer group"
       >
+        {/* Floating Asset Indicators (Top Left) */}
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 pointer-events-none">
+          <span
+            title={item.has_500 ? "3D Render (500x500) available" : "No 3D Render"}
+            className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-tight select-none shadow-xs transition-colors ${
+              item.has_500
+                ? "bg-blue-600 text-white"
+                : "bg-slate-100 text-slate-400 border border-slate-200"
+            }`}
+          >
+            500
+          </span>
+
+          <span
+            title={item.has_ld ? "Sketch / LD available" : "No Sketch"}
+            className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-tight select-none shadow-xs transition-colors ${
+              item.has_ld
+                ? "bg-blue-600 text-white"
+                : "bg-slate-100 text-slate-400 border border-slate-200"
+            }`}
+          >
+            LD
+          </span>
+
+          <span
+            title={item.has_cad ? "CAD technical drawing available" : "No CAD drawing"}
+            className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-tight select-none shadow-xs transition-colors ${
+              item.has_cad
+                ? "bg-blue-600 text-white"
+                : "bg-slate-100 text-slate-400 border border-slate-200"
+            }`}
+          >
+            CAD
+          </span>
+        </div>
+        
         
         {/* Shortlist Star Button (Floating Top Right) */}
         <button

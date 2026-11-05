@@ -119,7 +119,11 @@ export function getExportDownloadUrl(jobId) {
   return `/api/export-job/${jobId}/download`;
 }
 
-// 10. Product Image URL Helper
-export function getProductImageUrl(styleCode, full = false) {
-  return `/api/image/${encodeURIComponent(styleCode)}${full ? '?full=true' : ''}`;
+// 10. Product Image URL Helper (supports view: 'primary' | 'secondary' | 'cad')
+export function getProductImageUrl(styleCode, full = false, view = null) {
+  const params = new URLSearchParams();
+  if (full) params.append('full', 'true');
+  if (view) params.append('view', view);
+  const q = params.toString();
+  return `/api/image/${encodeURIComponent(styleCode)}${q ? `?${q}` : ''}`;
 }

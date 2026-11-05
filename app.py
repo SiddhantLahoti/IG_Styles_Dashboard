@@ -16,6 +16,7 @@ from data_loader import load_data, get_rm_details
 from filters import get_unique_filter_options, apply_filters_and_paginate , get_cascading_filter_options
 from image_service import (
     index_image_directories, find_image_for_style,
+    find_500_image_for_style, find_ld_image_for_style, find_cad_image_for_style,
     get_cropped_image_bytes, generate_shortlist_excel, generate_catalogue_excel
 )
 
@@ -125,17 +126,36 @@ def api_get_status():
     return sync_status
 
 @app.get("/api/image/{style_code}")
-def api_get_product_image(style_code: str, full: bool = False):
-    matched_path = find_image_for_style(style_code)
+def api_get_product_image(
+    style_code: str,
+    view: Optional[str] = Query(None),   # 'primary', 'secondary', 'cad', or None (card fallback)
+    full: bool = False
+):
+    if view == "cad":
+        matched_path = find_cad_image_for_style(style_code)
+    elif view == "primary":
+        matched_path = find_500_image_for_style(style_code)
+    elif view == "secondary":
+        matched_path = find_ld_image_for_style(style_code)
+    else:
+        # Default card priority: 500 -> LD -> None
+        matched_path = find_image_for_style(style_code)
+
     if not matched_path:
         raise HTTPException(status_code=404, detail="Image not found")
     try:
-        img_bytes = get_cropped_image_bytes(matched_path, full_resolution=full)
-        media_type = "image/png" if full else "image/jpeg"
-        return Response(content=img_bytes, media_type=media_type)
+        if full:
+            # Stream the raw, untouched original file directly from disk without cropping or compression
+            ext = matched_path.suffix.lower()
+            media_type = "image/png" if ext == ".png" else "image/jpeg"
+            return Response(content=matched_path.read_bytes(), media_type=media_type)
+
+        # Thumbnails for grid cards still use cropped preview for speed
+        img_bytes = get_cropped_image_bytes(matched_path, full_resolution=False)
+        return Response(content=img_bytes, media_type="image/jpeg")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 @app.get("/api/filters")
 def api_get_filters(
     search: Optional[str] = None,

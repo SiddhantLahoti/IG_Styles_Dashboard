@@ -8,15 +8,16 @@ import openpyxl
 from openpyxl.drawing.image import Image as ExcelImage
 import openpyxl.drawing.spreadsheet_drawing as ssd
 from openpyxl.drawing.picture import PictureLocking
-from config import PRIMARY_IMG_DIR, FALLBACK_IMG_DIR, IMAGE_CACHE_DIR
+from config import PRIMARY_IMG_DIR, FALLBACK_IMG_DIR, IMAGE_CACHE_DIR, CAD_IMG_DIR
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from data_loader import get_rm_details
-
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 _primary_index: Dict[str, Path] = {}
 _fallback_index: Dict[str, Path] = {}        # Fast dictionary lookup for LD
+_cad_index: Dict[str, Optional[Path]] = {}   # Resolved CAD path cache
+_cad_file_list: List[tuple] = []             # List of (stem_lower, Path, mtime) sorted by mtime desc
 _match_cache: Dict[str, Optional[Path]] = {}
 _is_indexed = False
 
@@ -104,6 +105,76 @@ def index_image_directories():
         except Exception as e:
             print(f"[WARNING] Secondary folder index error: {e}")
 
+    # 3. CAD folder (Recursive scan with live progress & network stat caching)
+    global _cad_file_list, _cad_index
+    _cad_index.clear()
+    _cad_file_list = []
+    cad_path = Path(CAD_IMG_DIR)
+
+    print(f"[INFO] Checking CAD folder connection: {CAD_IMG_DIR} ...")
+    if cad_path.exists():
+        print("[INFO] Connected to X:\\ drive successfully. Scanning CAD files...")
+        try:
+            raw_cad_files = []
+            file_count = 0
+
+            # Fast recursive scanner using os.scandir
+            def fast_scan(dir_path):
+                nonlocal file_count
+                try:
+                    with os.scandir(dir_path) as it:
+                        for entry in it:
+                            if entry.is_file(follow_symlinks=False):
+                                ext = os.path.splitext(entry.name)[1].lower()
+                                if ext in SUPPORTED_EXTENSIONS:
+                                    stem = os.path.splitext(entry.name)[0].strip().lower()
+                                    # entry.stat() is cached by Windows SMB - zero extra network calls!
+                                    try:
+                                        mtime = entry.stat().st_mtime
+                                    except Exception:
+                                        mtime = 0.0
+                                    raw_cad_files.append((stem, Path(entry.path), mtime))
+                                    file_count += 1
+                                    if file_count % 2000 == 0:
+                                        print(f"       -> Scanned {file_count:,} CAD files so far...")
+                            elif entry.is_dir(follow_symlinks=False):
+                                fast_scan(entry.path)
+                except (PermissionError, OSError):
+                    pass
+
+            fast_scan(str(cad_path))
+            print(f"[INFO] Total CAD files found: {file_count:,}. Sorting by latest date...")
+
+            # Sort descending by mtime
+            raw_cad_files.sort(key=lambda x: x[2], reverse=True)
+            _cad_file_list = raw_cad_files
+
+            # Pre-index exact stems, tokens, and right-trimmed style numbers (newest modified takes priority)
+            for stem, full_p, mtime in _cad_file_list:
+                if stem not in _cad_index:
+                    _cad_index[stem] = full_p
+
+                # Split by space, underscore, brackets (NEVER by hyphen '-')
+                tokens = re.split(r'[_ \t\(\)\[\]]+', stem)
+                for t in tokens:
+                    t_clean = t.strip(" ._")
+                    if t_clean:
+                        if t_clean not in _cad_index:
+                            _cad_index[t_clean] = full_p
+
+                        # Strip trailing suffix segments (e.g. 'br-59871-100-ma' -> 'br-59871-100')
+                        cur_str = t_clean
+                        while '-' in cur_str:
+                            cur_str = cur_str.rsplit('-', 1)[0].strip(" ._")
+                            if cur_str and cur_str not in _cad_index:
+                                _cad_index[cur_str] = full_p
+
+            print(f"[INFO] Indexed {len(_cad_file_list):,} CAD photos (sorted by latest modified date).")
+        except Exception as e:
+            print(f"[WARNING] CAD folder index error: {e}")
+    else:
+        print(f"[WARNING] CAD directory not accessible: {CAD_IMG_DIR}")
+
     _is_indexed = True
 
 
@@ -140,7 +211,67 @@ def find_image_for_style(style_code: str) -> Optional[Path]:
     _match_cache[q] = None
     return None
 
+def find_500_image_for_style(style_code: str) -> Optional[Path]:
+    global _is_indexed
+    if not _is_indexed:
+        index_image_directories()
+    q = str(style_code).strip().lower()
+    return _primary_index.get(q)
 
+
+def find_ld_image_for_style(style_code: str) -> Optional[Path]:
+    global _is_indexed
+    if not _is_indexed:
+        index_image_directories()
+    q = str(style_code).strip().lower()
+    if not q or q == "-":
+        return None
+    if q in _fallback_index:
+        return _fallback_index[q]
+    if q.startswith("l-") and q[2:] in _fallback_index:
+        return _fallback_index[q[2:]]
+    return None
+
+
+def find_cad_image_for_style(style_code: str) -> Optional[Path]:
+    global _is_indexed, _cad_index
+    if not _is_indexed:
+        index_image_directories()
+
+    q = str(style_code).strip().lower()
+    if not q or q == "-":
+        return None
+
+    # Instant dictionary lookup
+    if q in _cad_index:
+        return _cad_index[q]
+
+    # Fallback without 'L-' prefix if catalog code has it
+    if q.startswith("l-") and q[2:] in _cad_index:
+        return _cad_index[q[2:]]
+
+    return None
+
+
+def get_all_image_paths_for_style(style_code: str) -> dict:
+    """Returns resolved paths and source priority for a given style code."""
+    p_500 = find_500_image_for_style(style_code)
+    p_ld = find_ld_image_for_style(style_code)
+    p_cad = find_cad_image_for_style(style_code)
+
+    if p_500:
+        src = "primary"
+    elif p_ld:
+        src = "secondary"
+    else:
+        src = "none"
+
+    return {
+        "image_500_path": str(p_500) if p_500 else None,
+        "image_ld_path": str(p_ld) if p_ld else None,
+        "image_cad_path": str(p_cad) if p_cad else None,
+        "image_source": src
+    }
 # def get_cropped_image_bytes(image_path: Path, full_resolution: bool = False, tolerance: int = 15) -> bytes:
 #     """
 #     Crops white border padding. 

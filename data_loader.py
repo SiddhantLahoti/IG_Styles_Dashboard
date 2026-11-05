@@ -181,10 +181,23 @@ def build_sqlite_database():
     df_a["wax_label"] = [r[0] for r in wax_res]
     df_a["wax_value"] = [r[1] for r in wax_res]
 
-    # Pre-tag image sources
-    print("[INFO] Indexing image directories and tagging image sources...")
-    from image_service import get_image_source_for_style
-    df_a["image_source"] = df_a[COL_STYLE].apply(get_image_source_for_style)
+    # Pre-tag and resolve all image paths (500, LD, CAD) with live progress tracking
+    print("[INFO] Resolving 500, LD, and CAD image paths for all styles...")
+    from image_service import get_all_image_paths_for_style
+
+    styles_list = df_a[COL_STYLE].tolist()
+    total_styles = len(styles_list)
+    img_records = []
+
+    for idx, s in enumerate(styles_list, start=1):
+        img_records.append(get_all_image_paths_for_style(s))
+        if idx % 2000 == 0 or idx == total_styles:
+            print(f"       -> Resolved {idx:,} / {total_styles:,} styles...")
+
+    df_a["image_500_path"] = [r["image_500_path"] for r in img_records]
+    df_a["image_ld_path"] = [r["image_ld_path"] for r in img_records]
+    df_a["image_cad_path"] = [r["image_cad_path"] for r in img_records]
+    df_a["image_source"] = [r["image_source"] for r in img_records]
 
     # 2. Read and clean File B
     print("[INFO] Reading File B (Design Rm Detail)...")
@@ -249,6 +262,10 @@ def build_sqlite_database():
             f"CREATE INDEX IF NOT EXISTS idx_stone_dsg_ctg ON stone_items ({COL_RM_DSG}, {COL_RM_CTG});",
             f"CREATE INDEX IF NOT EXISTS idx_stone_subctg ON stone_items ({COL_RM_SUBCTG});",
             f"CREATE INDEX IF NOT EXISTS idx_stone_sieve ON stone_items ({COL_RM_LN1}, {COL_RM_LN2});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_img ON styles (image_source);",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_img_cad ON styles (image_cad_path);",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_img_500 ON styles (image_500_path);",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_img_ld ON styles (image_ld_path);"
         ]
         for sql in indexes:
             conn.execute(sql)
@@ -284,8 +301,8 @@ def load_data(force_reload: bool = False):
     with _lock:
         if force_reload:
             print("[INFO] Triggering Excel SQL refresh (Data -> Refresh All)...")
-            # refresh_excel_file_via_app(EXCEL_FILE_A)
-            # refresh_excel_file_via_app(EXCEL_FILE_B)
+            refresh_excel_file_via_app(EXCEL_FILE_A)
+            refresh_excel_file_via_app(EXCEL_FILE_B)
         mtime_a = os.path.getmtime(EXCEL_FILE_A) if os.path.exists(EXCEL_FILE_A) else 0
         mtime_b = os.path.getmtime(EXCEL_FILE_B) if os.path.exists(EXCEL_FILE_B) else 0
         db_mtime = os.path.getmtime(DB_PATH) if os.path.exists(DB_PATH) else 0

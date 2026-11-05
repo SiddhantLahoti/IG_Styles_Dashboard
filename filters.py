@@ -317,6 +317,10 @@ def apply_filters_and_paginate(
     # Attach Stone Shapes and format date to DD:MM:YYYY
     for item in items:
         # Date cleanup to DD:MM:YYYY
+        # Attach image availability booleans
+        item["has_500"] = bool(item.get("image_500_path"))
+        item["has_ld"] = bool(item.get("image_ld_path"))
+        item["has_cad"] = bool(item.get("image_cad_path"))
         raw_date = str(item.get(COL_DATE) or "").split(" ")[0].strip()
         if raw_date and raw_date != "-":
             # Handles YYYY-MM-DD or DD-MM-YYYY formats cleanly
