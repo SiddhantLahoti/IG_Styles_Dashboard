@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException , Depends , Header
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 from typing import Optional, List
@@ -19,6 +19,13 @@ from image_service import (
     find_500_image_for_style, find_ld_image_for_style, find_cad_image_for_style,
     get_cropped_image_bytes, generate_shortlist_excel, generate_catalogue_excel
 )
+from auth_service import (
+    init_auth_db, authenticate_user, create_access_token,
+    decode_access_token, list_all_users, create_new_user,
+    delete_user_by_username, update_user_password,
+    set_user_active_status, is_user_still_active
+)
+
 
 # Locate the frontend dist directory
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "frontend", "dist")
@@ -94,6 +101,8 @@ async def schedule_daily_refresh(target_hour: int = 2, target_minute: int = 0):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 0. Initialize authentication database
+    init_auth_db()
     # 1. Startup initial sync
     t = threading.Thread(target=background_initial_sync, daemon=True)
     t.start()
@@ -124,6 +133,28 @@ def serve_home():
 @app.get("/api/status")
 def api_get_status():
     return sync_status
+
+# --- Security Dependency Helpers ---
+def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authentication token missing")
+    token = authorization.split("Bearer ")[1].strip()
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+
+    # Real-time check: Ensure user hasn't been deactivated or deleted while holding a token
+    username = payload.get("sub")
+    if not username or not is_user_still_active(username):
+        raise HTTPException(status_code=401, detail="Account is disabled or no longer exists")
+
+    return payload
+
+def get_current_admin(user: dict = Depends(get_current_user)) -> dict:
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin permissions required")
+    return user
+
 
 @app.get("/api/image/{style_code}")
 def api_get_product_image(
@@ -179,6 +210,8 @@ def api_get_filters(
     max_total_wt: Optional[float] = None,
     min_wax_wt: Optional[float] = None,
     max_wax_wt: Optional[float] = None,
+    min_pointed_wt: Optional[float] = None,
+    max_pointed_wt: Optional[float] = None,
     lab_grown: Optional[str] = Query(None),
     image_source: Optional[str] = Query(None),
     sieve_match_mode: Optional[str] = Query("any"),
@@ -187,7 +220,9 @@ def api_get_filters(
     ln1: Optional[float] = None,
     ln2: Optional[float] = None,
     min_rm_wt: Optional[float] = None,
-    max_rm_wt: Optional[float] = None
+    max_rm_wt: Optional[float] = None,
+    only_diamonds: Optional[bool] = None,
+    user: dict = Depends(get_current_user)
 ):
     return get_cascading_filter_options(
         search_query=search,
@@ -214,16 +249,19 @@ def api_get_filters(
         max_total_wt=max_total_wt,
         min_wax_wt=min_wax_wt,
         max_wax_wt=max_wax_wt,
+        min_pointed_wt=min_pointed_wt,
+        max_pointed_wt=max_pointed_wt,
         rm_categories=rm_category,
         rm_subcategories=rm_subcategory,
         ln1=ln1,
         ln2=ln2,
         min_rm_wt=min_rm_wt,
-        max_rm_wt=max_rm_wt
+        max_rm_wt=max_rm_wt,
+        only_diamonds=only_diamonds
     )
 
 @app.get("/api/rm-details/{style_code}")
-def api_get_rm_details(style_code: str):
+def api_get_rm_details(style_code: str,user: dict = Depends(get_current_user)):
     """Returns the stone & raw material breakdown rows from File B for this design."""
     return get_rm_details(style_code)
 
@@ -254,6 +292,8 @@ def api_get_products(
     has_set: Optional[bool] = None,
     min_wax_wt: Optional[float] = None,      
     max_wax_wt: Optional[float] = None,
+    min_pointed_wt: Optional[float] = None,
+    max_pointed_wt: Optional[float] = None,
     # File B Filters
     rm_category: Optional[List[str]] = Query(None),
     rm_subcategory: Optional[List[str]] = Query(None),
@@ -261,8 +301,10 @@ def api_get_products(
     ln2: Optional[float] = None,
     min_rm_wt: Optional[float] = None,
     max_rm_wt: Optional[float] = None,
+    only_diamonds: Optional[bool] = None,
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=24, ge=12, le=96)
+    page_size: int = Query(default=24, ge=12, le=96),
+    user: dict = Depends(get_current_user)
 ):
     return apply_filters_and_paginate(
         search_query=search,
@@ -286,6 +328,10 @@ def api_get_products(
         end_date=end_date,
         min_total_wt=min_total_wt,
         max_total_wt=max_total_wt,
+        min_pointed_wt=min_pointed_wt, 
+        max_pointed_wt=max_pointed_wt,
+        only_diamonds=only_diamonds,
+        
         lab_grown=lab_grown,
         image_source=image_source,
         sieve_match_mode=sieve_match_mode,
@@ -319,7 +365,10 @@ def api_get_all_filtered_products(
     end_date: Optional[str] = None,
     min_total_wt: Optional[float] = None,
     max_total_wt: Optional[float] = None,
+    min_pointed_wt: Optional[float] = None,
+    max_pointed_wt: Optional[float] = None,
     lab_grown: Optional[str] = Query(None),
+    only_diamonds: Optional[bool] = None,
     image_source: Optional[str] = Query(None),
     sieve_match_mode: Optional[str] = Query("any"),
     size: Optional[List[str]] = Query(None),
@@ -330,7 +379,8 @@ def api_get_all_filtered_products(
     ln1: Optional[float] = None,
     ln2: Optional[float] = None,
     min_rm_wt: Optional[float] = None,
-    max_rm_wt: Optional[float] = None
+    max_rm_wt: Optional[float] = None,
+    user: dict = Depends(get_current_user)
 ):
     res = apply_filters_and_paginate(
         search_query=search,
@@ -351,7 +401,10 @@ def api_get_all_filtered_products(
         end_date=end_date,
         min_total_wt=min_total_wt,
         max_total_wt=max_total_wt,
+        min_pointed_wt=min_pointed_wt, 
+        max_pointed_wt=max_pointed_wt,
         lab_grown=lab_grown,
+        only_diamonds=only_diamonds,
         image_source=image_source,
         sieve_match_mode=sieve_match_mode,
         sizes=size,
@@ -408,7 +461,7 @@ def process_export_job(job_id: str, export_type: str, items: List[dict], per_row
         export_jobs[job_id]["error"] = str(e)
 
 @app.post("/api/export-job/start")
-def api_start_export_job(payload: ExportPayload, export_type: str = Query("row")):
+def api_start_export_job(payload: ExportPayload, export_type: str = Query("row"),user: dict = Depends(get_current_user)):
     if not payload.items:
         raise HTTPException(status_code=400, detail="No items to export")
 
@@ -456,6 +509,108 @@ def api_download_export_file(job_id: str):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers
     )
+
+# --- Auth Request Payloads ---
+class LoginPayload(BaseModel):
+    username: str
+    password: str
+
+class CreateUserPayload(BaseModel):
+    username: str
+    password: str
+    role: Optional[str] = "user"
+
+class UpdatePasswordPayload(BaseModel):
+    new_password: str
+
+class UpdateStatusPayload(BaseModel):
+    is_active: bool
+
+
+
+# --- Auth Routes ---
+@app.post("/api/auth/login")
+def api_login(payload: LoginPayload):
+    user = authenticate_user(payload.username, payload.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    if user.get("error") == "ACCOUNT_DISABLED":
+        raise HTTPException(
+            status_code=403,
+            detail="Your account has been deactivated. Please contact an administrator."
+        )
+
+    token = create_access_token(user["username"], user["role"])
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "username": user["username"],
+            "role": user["role"]
+        }
+    }
+
+@app.get("/api/auth/me")
+def api_get_me(user: dict = Depends(get_current_user)):
+    return {"username": user["sub"], "role": user.get("role", "user")}
+
+# --- Admin User Management Routes (Protected) ---
+@app.get("/api/admin/users")
+def api_list_users(admin: dict = Depends(get_current_admin)):
+    return {"users": list_all_users()}
+
+@app.post("/api/admin/users")
+def api_create_user(payload: CreateUserPayload, admin: dict = Depends(get_current_admin)):
+    if not payload.username.strip() or not payload.password.strip():
+        raise HTTPException(status_code=400, detail="Username and password cannot be empty")
+    
+    success = create_new_user(payload.username, payload.password, payload.role or "user")
+    if not success:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    return {"status": "success", "message": f"User '{payload.username}' created successfully"}
+
+@app.delete("/api/admin/users/{username}")
+def api_delete_user(username: str, admin: dict = Depends(get_current_admin)):
+    if username.strip().lower() == "admin":
+        raise HTTPException(status_code=400, detail="Cannot delete master admin account")
+    
+    success = delete_user_by_username(username)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "success", "message": f"User '{username}' deleted successfully"}
+
+
+@app.put("/api/admin/users/{username}/password")
+def api_update_password(
+    username: str,
+    payload: UpdatePasswordPayload,
+    admin: dict = Depends(get_current_admin)
+):
+    if not payload.new_password.strip():
+        raise HTTPException(status_code=400, detail="New password cannot be empty")
+
+    success = update_user_password(username, payload.new_password)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "success", "message": f"Password updated for '{username}'"}
+
+@app.put("/api/admin/users/{username}/status")
+def api_update_user_status(
+    username: str,
+    payload: UpdateStatusPayload,
+    admin: dict = Depends(get_current_admin)
+):
+    if username.strip().lower() == "admin" and not payload.is_active:
+        raise HTTPException(status_code=400, detail="Cannot deactivate the master admin account")
+
+    success = set_user_active_status(username, payload.is_active)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    status_str = "activated" if payload.is_active else "suspended"
+    return {"status": "success", "message": f"User '{username}' {status_str} successfully"}
+
 
 if __name__ == "__main__":
     import uvicorn

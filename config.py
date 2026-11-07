@@ -2,6 +2,15 @@ import os
 
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, "catalog.db")
+
+# --- Authentication & Secrets ---
+AUTH_DB_PATH = os.path.join(BASE_DIR, "auth.db")
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "fallback-secret-key-change-in-env")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
 # 1. Dual Excel File Paths
 EXCEL_FILE_A = os.path.join(BASE_DIR, "Design Detail & Ana_v3.xlsx")
 EXCEL_FILE_B = os.path.join(BASE_DIR, "Design Rm Detail_v3.xlsx")

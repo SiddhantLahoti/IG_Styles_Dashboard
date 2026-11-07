@@ -6,7 +6,7 @@ from config import (
     COL_METAL, COL_COLOR, COL_TOTAL_WT,
     COL_RM_DSG, COL_RM_CTG, COL_RM_SUBCTG, COL_RM_LN1, COL_RM_LN2, COL_RM_WT,
     COL_SET_CD, COL_SIZE, COL_CON_BY_DESC, COL_CON_BY_DESC1,
-    COL_CREAT_BY_DESC, COL_CREAT_BY_DESC1, COL_WET_BY_DESC, COL_WET_BY_DESC1
+    COL_CREAT_BY_DESC, COL_CREAT_BY_DESC1, COL_WET_BY_DESC, COL_WET_BY_DESC1 , COL_RM_QTY
 )
 import data_loader
 from data_loader import get_db_connection, get_filter_options
@@ -41,13 +41,16 @@ def _build_where_clause(
     max_total_wt: Optional[float] = None,
     min_wax_wt: Optional[float] = None,
     max_wax_wt: Optional[float] = None,
+    min_pointed_wt: Optional[float] = None,
+    max_pointed_wt: Optional[float] = None,
     rm_categories: Optional[List[str]] = None,
     rm_subcategories: Optional[List[str]] = None,
     ln1: Optional[float] = None,
     ln2: Optional[float] = None,
     min_rm_wt: Optional[float] = None,
     max_rm_wt: Optional[float] = None,
-    exclude_dim: Optional[str] = None
+    exclude_dim: Optional[str] = None,
+    only_diamonds: Optional[bool] = None,
 ):
     """Builds parameterized SQL WHERE conditions, optionally excluding a dimension for cascading dropdowns."""
     where_clauses = ["1=1"]
@@ -138,10 +141,67 @@ def _build_where_clause(
     if max_wax_wt is not None:
         where_clauses.append("wax_value <= ?")
         params.append(max_wax_wt)
+    # Total C & D stone weight filter (matches card display & sorting)
+    if min_rm_wt is not None:
+        where_clauses.append("rm_stones_wt >= ?")
+        params.append(min_rm_wt)
+    if max_rm_wt is not None:
+        where_clauses.append("rm_stones_wt <= ?")
+        params.append(max_rm_wt)
+    # Pointed Weight (Context-aware: checks the exact stone line item)
+    if min_pointed_wt is not None or max_pointed_wt is not None:
+        ptr_conds = []
+        ptr_params = []
 
+        # 1. Scope to selected categories or shapes if chosen, else default to all C & D
+        if rm_subcategories:
+            shape_clauses = []
+            for item in rm_subcategories:
+                if " : " in item:
+                    parts = item.split(" : ")
+                    shape_clauses.append(f"({COL_RM_SUBCTG} = ? AND {COL_RM_CTG} = ?)")
+                    ptr_params.extend([parts[0].strip(), parts[1].strip()])
+                else:
+                    shape_clauses.append(f"({COL_RM_SUBCTG} = ?)")
+                    ptr_params.append(item.strip())
+            ptr_conds.append(f"({' OR '.join(shape_clauses)})")
+        elif rm_categories:
+            placeholders = ",".join(["?"] * len(rm_categories))
+            ptr_conds.append(f"{COL_RM_CTG} IN ({placeholders})")
+            ptr_params.extend(rm_categories)
+        else:
+            ptr_conds.append(f"UPPER({COL_RM_CTG}) IN ('C', 'D')")
+
+        # 2. Pointed weight range constraints
+        if min_pointed_wt is not None:
+            ptr_conds.append("pointed_wt >= ?")
+            ptr_params.append(min_pointed_wt)
+        if max_pointed_wt is not None:
+            ptr_conds.append("pointed_wt <= ?")
+            ptr_params.append(max_pointed_wt)
+
+        where_clauses.append(f"""{COL_STYLE} IN (
+            SELECT DISTINCT {COL_RM_DSG} 
+            FROM stone_items 
+            WHERE {" AND ".join(ptr_conds)}
+        )""")
+        params.extend(ptr_params)
+
+    
+    # Only Diamonds & No Color Stones condition
+    if only_diamonds:
+        where_clauses.append(f"""{COL_STYLE} IN (
+            SELECT DISTINCT {COL_RM_DSG} FROM stone_items WHERE UPPER({COL_RM_CTG}) = 'D'
+        )""")
+        where_clauses.append(f"""{COL_STYLE} NOT IN (
+            SELECT DISTINCT {COL_RM_DSG} FROM stone_items WHERE UPPER({COL_RM_CTG}) = 'C'
+        )""")
+                
+                
     # File B Raw Material (Stone) Constraints
-    rm_active = any([rm_categories, rm_subcategories, ln1 is not None, ln2 is not None, min_rm_wt is not None, max_rm_wt is not None])
+    rm_active = any([rm_categories, rm_subcategories, ln1 is not None, ln2 is not None])
     if rm_active:
+        
         # Category and SubCategory checks
         if rm_categories and exclude_dim != "rm_categories":
             p = ",".join(["?"] * len(rm_categories))
@@ -170,55 +230,33 @@ def _build_where_clause(
                 SELECT DISTINCT {COL_RM_DSG} FROM stone_items WHERE ({combined_cond})
             )""")
 
-        # Sieve and stone weight constraints
-        has_numeric = any([ln1 is not None, ln2 is not None, min_rm_wt is not None, max_rm_wt is not None])
-        if has_numeric:
-            if sieve_match_mode == "exclusive" and (ln1 is not None or ln2 is not None):
-                # Exclusive mode: every true stone row must match
-                sieve_conds = []
-                sieve_params = []
-                if ln1 is not None:
-                    sieve_conds.append(f"ROUND({COL_RM_LN1}, 3) = ?")
-                    sieve_params.append(round(ln1, 3))
-                if ln2 is not None:
-                    sieve_conds.append(f"ROUND({COL_RM_LN2}, 3) = ?")
-                    sieve_params.append(round(ln2, 3))
-                if min_rm_wt is not None:
-                    sieve_conds.append(f"{COL_RM_WT} >= ?")
-                    sieve_params.append(min_rm_wt)
-                if max_rm_wt is not None:
-                    sieve_conds.append(f"{COL_RM_WT} <= ?")
-                    sieve_params.append(max_rm_wt)
+        # Sieve constraints (ln1, ln2)
+        has_sieve = ln1 is not None or ln2 is not None
+        if has_sieve:
+            sieve_conds = []
+            sieve_params = []
+            if ln1 is not None:
+                sieve_conds.append(f"ROUND({COL_RM_LN1}, 3) = ?")
+                sieve_params.append(round(ln1, 3))
+            if ln2 is not None:
+                sieve_conds.append(f"ROUND({COL_RM_LN2}, 3) = ?")
+                sieve_params.append(round(ln2, 3))
 
-                cond_str = " AND ".join(sieve_conds)
+            cond_str = " AND ".join(sieve_conds)
+            if sieve_match_mode == "exclusive":
                 where_clauses.append(f"""{COL_STYLE} IN (
                     SELECT {COL_RM_DSG}
                     FROM stone_items
-                    WHERE ({COL_RM_LN1} > 0 OR {COL_RM_CTG} IN ('D', 'C'))
+                    WHERE ({COL_RM_LN1} > 0 OR UPPER({COL_RM_CTG}) IN ('D', 'C'))
                     GROUP BY {COL_RM_DSG}
                     HAVING COUNT(*) = SUM(CASE WHEN {cond_str} THEN 1 ELSE 0 END)
                 )""")
                 params.extend(sieve_params)
             else:
-                # Any / Contains mode
-                sieve_conds = []
-                sieve_params = []
-                if ln1 is not None:
-                    sieve_conds.append(f"ROUND({COL_RM_LN1}, 3) = ?")
-                    sieve_params.append(round(ln1, 3))
-                if ln2 is not None:
-                    sieve_conds.append(f"ROUND({COL_RM_LN2}, 3) = ?")
-                    sieve_params.append(round(ln2, 3))
-                if min_rm_wt is not None:
-                    sieve_conds.append(f"{COL_RM_WT} >= ?")
-                    sieve_params.append(min_rm_wt)
-                if max_rm_wt is not None:
-                    sieve_conds.append(f"{COL_RM_WT} <= ?")
-                    sieve_params.append(max_rm_wt)
-
-                cond_str = " AND ".join(sieve_conds)
                 where_clauses.append(f"""{COL_STYLE} IN (
-                    SELECT DISTINCT {COL_RM_DSG} FROM stone_items WHERE {cond_str}
+                    SELECT DISTINCT {COL_RM_DSG} 
+                    FROM stone_items 
+                    WHERE UPPER({COL_RM_CTG}) IN ('D', 'C') AND {cond_str}
                 )""")
                 params.extend(sieve_params)
 
@@ -251,12 +289,15 @@ def apply_filters_and_paginate(
     end_date: Optional[str] = None,
     min_total_wt: Optional[float] = None,
     max_total_wt: Optional[float] = None,
+    min_pointed_wt: Optional[float] = None,
+    max_pointed_wt: Optional[float] = None,
     rm_categories: Optional[List[str]] = None,
     rm_subcategories: Optional[List[str]] = None,
     ln1: Optional[float] = None,
     ln2: Optional[float] = None,
     min_rm_wt: Optional[float] = None,
     max_rm_wt: Optional[float] = None,
+    only_diamonds: Optional[bool] = None,
     page: int = 1,
     page_size: int = 24
 ) -> dict:
@@ -270,8 +311,8 @@ def apply_filters_and_paginate(
         metals=metals, colors=colors, set_codes=set_codes,has_set=has_set, sizes=sizes,
         concept_designers=concept_designers, creative_designers=creative_designers,
         weight_designers=weight_designers, start_date=start_date, end_date=end_date,
-        min_total_wt=min_total_wt, max_total_wt=max_total_wt, min_wax_wt=min_wax_wt,
-        max_wax_wt=max_wax_wt, rm_categories=rm_categories, rm_subcategories=rm_subcategories,
+        min_total_wt=min_total_wt, max_total_wt=max_total_wt, min_wax_wt=min_wax_wt,min_pointed_wt=min_pointed_wt, max_pointed_wt=max_pointed_wt,
+        max_wax_wt=max_wax_wt, rm_categories=rm_categories, rm_subcategories=rm_subcategories,only_diamonds=only_diamonds,
         ln1=ln1, ln2=ln2, min_rm_wt=min_rm_wt, max_rm_wt=max_rm_wt
     )
 
@@ -375,14 +416,18 @@ def get_cascading_filter_options(
     end_date: Optional[str] = None,
     min_total_wt: Optional[float] = None,
     max_total_wt: Optional[float] = None,
+
     min_wax_wt: Optional[float] = None,
     max_wax_wt: Optional[float] = None,
+    min_pointed_wt: Optional[float] = None,
+    max_pointed_wt: Optional[float] = None,
     rm_categories: Optional[List[str]] = None,
     rm_subcategories: Optional[List[str]] = None,
     ln1: Optional[float] = None,
     ln2: Optional[float] = None,
     min_rm_wt: Optional[float] = None,
     max_rm_wt: Optional[float] = None,
+    only_diamonds: Optional[bool] = None
 ) -> dict:
     """Uses indexed SELECT DISTINCT queries to resolve cascading dropdown options in milliseconds."""
     conn = get_db_connection()
@@ -396,9 +441,9 @@ def get_cascading_filter_options(
             metals=metals, colors=colors, set_codes=set_codes,has_set=has_set, sizes=sizes,
             concept_designers=concept_designers, creative_designers=creative_designers,
             weight_designers=weight_designers, start_date=start_date, end_date=end_date,
-            min_total_wt=min_total_wt, max_total_wt=max_total_wt, min_wax_wt=min_wax_wt,
+            min_total_wt=min_total_wt, max_total_wt=max_total_wt, min_wax_wt=min_wax_wt,min_pointed_wt=min_pointed_wt, max_pointed_wt=max_pointed_wt,
             max_wax_wt=max_wax_wt, rm_categories=rm_categories, rm_subcategories=rm_subcategories,
-            ln1=ln1, ln2=ln2, min_rm_wt=min_rm_wt, max_rm_wt=max_rm_wt,
+            ln1=ln1, ln2=ln2, min_rm_wt=min_rm_wt, max_rm_wt=max_rm_wt,only_diamonds=only_diamonds,
             exclude_dim=dim_name
         )
         cur.execute(f"SELECT DISTINCT {col_name} FROM styles WHERE {where_sql} AND {col_name} IS NOT NULL AND {col_name} != '' ORDER BY {col_name} ASC;", params)

@@ -212,7 +212,10 @@ def build_sqlite_database():
     df_b[COL_RM_LN2] = pd.to_numeric(df_b[COL_RM_LN2], errors="coerce").fillna(0.0)
     df_b[COL_RM_QTY] = pd.to_numeric(df_b[COL_RM_QTY], errors="coerce").fillna(0).astype(int)
     df_b[COL_RM_WT] = pd.to_numeric(df_b[COL_RM_WT], errors="coerce").fillna(0.0)
-
+    # Pre-calculate individual stone pointed weight (RmWt / RmQty)
+    df_b["pointed_wt"] = (
+        df_b[COL_RM_WT] / df_b[COL_RM_QTY].replace(0, float("nan"))
+    ).fillna(0.0).round(4)
     # Aggregate total stone weight and quantity strictly for Categories 'C' and 'D'
     df_b_stones_only = df_b[df_b[COL_RM_CTG].str.upper().isin(["C", "D"])].copy()
 
@@ -258,14 +261,17 @@ def build_sqlite_database():
             f"CREATE INDEX IF NOT EXISTS idx_styles_size ON styles ({COL_SIZE});",
             f"CREATE INDEX IF NOT EXISTS idx_styles_wax ON styles (wax_value);",
             f"CREATE INDEX IF NOT EXISTS idx_styles_totwt ON styles ({COL_TOTAL_WT});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_rm_stones_wt ON styles (rm_stones_wt);",
             f"CREATE INDEX IF NOT EXISTS idx_styles_img ON styles (image_source);",
             f"CREATE INDEX IF NOT EXISTS idx_stone_dsg_ctg ON stone_items ({COL_RM_DSG}, {COL_RM_CTG});",
             f"CREATE INDEX IF NOT EXISTS idx_stone_subctg ON stone_items ({COL_RM_SUBCTG});",
             f"CREATE INDEX IF NOT EXISTS idx_stone_sieve ON stone_items ({COL_RM_LN1}, {COL_RM_LN2});",
+            f"CREATE INDEX IF NOT EXISTS idx_stone_pointed ON stone_items ({COL_RM_CTG}, pointed_wt, {COL_RM_DSG});",
             f"CREATE INDEX IF NOT EXISTS idx_styles_img ON styles (image_source);",
             f"CREATE INDEX IF NOT EXISTS idx_styles_img_cad ON styles (image_cad_path);",
             f"CREATE INDEX IF NOT EXISTS idx_styles_img_500 ON styles (image_500_path);",
             f"CREATE INDEX IF NOT EXISTS idx_styles_img_ld ON styles (image_ld_path);"
+            
         ]
         for sql in indexes:
             conn.execute(sql)
@@ -301,8 +307,8 @@ def load_data(force_reload: bool = False):
     with _lock:
         if force_reload:
             print("[INFO] Triggering Excel SQL refresh (Data -> Refresh All)...")
-            refresh_excel_file_via_app(EXCEL_FILE_A)
-            refresh_excel_file_via_app(EXCEL_FILE_B)
+            # refresh_excel_file_via_app(EXCEL_FILE_A)
+            # refresh_excel_file_via_app(EXCEL_FILE_B)
         mtime_a = os.path.getmtime(EXCEL_FILE_A) if os.path.exists(EXCEL_FILE_A) else 0
         mtime_b = os.path.getmtime(EXCEL_FILE_B) if os.path.exists(EXCEL_FILE_B) else 0
         db_mtime = os.path.getmtime(DB_PATH) if os.path.exists(DB_PATH) else 0
@@ -337,10 +343,28 @@ def load_data(force_reload: bool = False):
             stone_ranges = cur.execute(f"""
                 SELECT 
                     MIN({COL_RM_LN1}), MAX({COL_RM_LN1}),
-                    MIN({COL_RM_LN2}), MAX({COL_RM_LN2}),
-                    MIN({COL_RM_WT}), MAX({COL_RM_WT})
-                FROM stone_items;
+                    MIN({COL_RM_LN2}), MAX({COL_RM_LN2})
+                FROM stone_items
+                WHERE UPPER({COL_RM_CTG}) IN ('C', 'D');
             """).fetchone()
+
+            # Get min/max total C & D stone weight across designs
+            total_stone_ranges = cur.execute("""
+                SELECT 
+                    MIN(rm_stones_wt), MAX(rm_stones_wt)
+                FROM styles
+                WHERE rm_stones_wt > 0;
+            """).fetchone()
+            
+            # Get min/max pointed weight directly from the pre-calculated column
+            pointed_ranges = cur.execute("""
+                SELECT 
+                    MIN(pointed_wt),
+                    MAX(pointed_wt)
+                FROM stone_items
+                WHERE UPPER(Ctg) IN ('C', 'D') AND pointed_wt > 0;
+            """).fetchone()
+            
 
             _filter_options_cache = {
                 "categories": fetch_uniques(COL_CTG_DESC),
@@ -364,8 +388,11 @@ def load_data(force_reload: bool = False):
                     "min_wax_wt": ranges[4] or 0.0, "max_wax_wt": ranges[5] or 0.0,
                     "min_ln1": stone_ranges[0] or 0.0, "max_ln1": stone_ranges[1] or 0.0,
                     "min_ln2": stone_ranges[2] or 0.0, "max_ln2": stone_ranges[3] or 0.0,
-                    "min_rm_wt": stone_ranges[4] or 0.0, "max_rm_wt": stone_ranges[5] or 0.0,
-                }
+                    "min_rm_wt": (total_stone_ranges[0] if total_stone_ranges else 0.0) or 0.0,
+                    "max_rm_wt": (total_stone_ranges[1] if total_stone_ranges else 0.0) or 0.0,
+                    "min_pointed_wt": (pointed_ranges[0] if pointed_ranges else 0.0) or 0.0,
+                    "max_pointed_wt": (pointed_ranges[1] if pointed_ranges else 0.0) or 0.0,
+                    }
             }
             conn.close()
 

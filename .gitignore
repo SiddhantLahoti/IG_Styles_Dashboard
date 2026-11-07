@@ -11,7 +11,7 @@ catalog.db
 venv/
 env/
 .venv/
-
+.env
 .cache_images
 
 # Ignore uploaded and generated Excel spreadsheets

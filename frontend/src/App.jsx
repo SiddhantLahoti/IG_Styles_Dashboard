@@ -8,6 +8,8 @@ import StoneBreakdownModal from './components/modals/StoneBreakdownModal';
 import ExportProgressModal from './components/modals/ExportProgressModal';
 import ClearConfirmModal from './components/modals/ClearConfirmModal';
 import DesignerModal from './components/modals/DesignerModal';
+import LoginPage from './components/auth/LoginPage';
+import UserManager from './components/admin/UserManager';
 
 import {
   getFilterOptions,
@@ -17,10 +19,14 @@ import {
   startExportJob,
   getExportProgress,
   getExportDownloadUrl,
+  getCurrentUser,
+  logoutUser,
+  getStoredUser,
 } from './services/api';
 
 const initialFilters = {
   lab_grown: '',
+  only_diamonds: false,
   image_source: '',        
   category: [],
   sales_cat1: [],
@@ -38,6 +44,8 @@ const initialFilters = {
   weight_by: [],
   min_wax_wt: '',          
   max_wax_wt: '',
+  min_pointed_wt: '',
+  max_pointed_wt: '',
   start_date: '',
   end_date: '',
   min_total_wt: '',
@@ -51,8 +59,11 @@ const initialFilters = {
 };
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState(() => getStoredUser());
+  const [isVerifyingAuth, setIsVerifyingAuth] = useState(true);
+
   const [isBackendReady, setIsBackendReady] = useState(false);
-  const [activeTab, setActiveTab] = useState('explore'); // 'explore' | 'shortlist'
+  const [activeTab, setActiveTab] = useState('explore'); // 'explore' | 'shortlist' | 'users'
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -69,12 +80,13 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(24);
 
-  // Shortlist state: Map of styleCode -> product item
+  // Shortlist state
   const [shortlistedMap, setShortlistedMap] = useState(new Map());
   const [cataloguePerRow, setCataloguePerRow] = useState(4);
 
   // Modals state
-  const [zoomItem, setZoomItem] = useState(null);  const [rmCode, setRmCode] = useState(null);
+  const [zoomItem, setZoomItem] = useState(null);
+  const [rmCode, setRmCode] = useState(null);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [exportModal, setExportModal] = useState({
     isOpen: false,
@@ -85,6 +97,33 @@ export default function App() {
   const [designerItem, setDesignerItem] = useState(null);
   const [isShortlistingAll, setIsShortlistingAll] = useState(false);
 
+  // Verify auth session token on mount & listen for real-time suspensions
+  useEffect(() => {
+    getCurrentUser()
+      .then((user) => {
+        if (user) setCurrentUser(user);
+        else setCurrentUser(null);
+      })
+      .catch(() => setCurrentUser(null))
+      .finally(() => setIsVerifyingAuth(false));
+
+    // Instant auto-kick handler if suspended or session expires
+    const handleUnauthorized = () => {
+      setCurrentUser(null);
+      setActiveTab('explore');
+      alert('Your access has been suspended or your session expired. Please log in again.');
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
+  const handleLogout = () => {
+    logoutUser();
+    setCurrentUser(null);
+    setActiveTab('explore');
+  };
+
   // Debounce search input by 300ms
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -94,14 +133,14 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Load initial and dynamic cascading dropdown options
+  // Load cascading filter options
   useEffect(() => {
-    if (!isBackendReady) return;
+    if (!isBackendReady || !currentUser || activeTab === 'users') return;
 
     getFilterOptions(filters, debouncedSearch)
       .then((opts) => setFilterOptions(opts || {}))
       .catch((err) => console.error('Failed to load filter options:', err));
-  }, [isBackendReady, filters, debouncedSearch]);
+  }, [isBackendReady, currentUser, activeTab, filters, debouncedSearch]);
 
   // Fetch products for "Explore" tab
   const fetchExploreProducts = useCallback(async () => {
@@ -115,14 +154,13 @@ export default function App() {
     }
   }, [filters, currentPage, pageSize, debouncedSearch]);
 
-  // Update view whenever filters, pagination, or tab changes
+  // Update view on tab or filter change
   useEffect(() => {
-    if (!isBackendReady) return;
+    if (!isBackendReady || !currentUser) return;
 
     if (activeTab === 'explore') {
       fetchExploreProducts();
-    } else {
-      // In-memory pagination for Shortlist collection
+    } else if (activeTab === 'shortlist') {
       const allShortlisted = Array.from(shortlistedMap.values());
       const total = allShortlisted.length;
       const pages = Math.ceil(total / pageSize) || 1;
@@ -137,47 +175,48 @@ export default function App() {
         setCurrentPage(validPage);
       }
     }
-  }, [isBackendReady, activeTab, fetchExploreProducts, shortlistedMap, currentPage, pageSize]);
+  }, [isBackendReady, currentUser, activeTab, fetchExploreProducts, shortlistedMap, currentPage, pageSize]);
 
   // Handlers
   const handleFilterChange = (field, value) => {
-    setFilters((prev) => {
-      const nextFilters = { ...prev, [field]: value };
+  setFilters((prev) => {
+    const nextFilters = { ...prev, [field]: value };
 
-      // If stone type (rm_category) changes, remove shapes that belong to unchecked categories
-      if (field === 'rm_category' && Array.isArray(value) && value.length > 0) {
-        const currentShapes = Array.isArray(prev.rm_subcategory) ? prev.rm_subcategory : [];
-        nextFilters.rm_subcategory = currentShapes.filter((shapeStr) => {
-          if (!shapeStr.includes(' : ')) return true;
-          const ctg = shapeStr.split(' : ')[1]?.trim();
-          return value.includes(ctg);
-        });
+    // If 'Only Diamonds' is checked, remove Category 'C' and any 'C' shapes from active filters
+    if (field === 'only_diamonds' && value === true) {
+      if (Array.isArray(prev.rm_category)) {
+        nextFilters.rm_category = prev.rm_category.filter((c) => c !== 'C');
       }
+      if (Array.isArray(prev.rm_subcategory)) {
+        nextFilters.rm_subcategory = prev.rm_subcategory.filter(
+          (shapeStr) => !shapeStr.endsWith(': C')
+        );
+      }
+    }
 
-      return nextFilters;
-    });
-    setCurrentPage(1);
-  };
+    // If stone type (rm_category) changes, keep existing shape filtering logic
+    if (field === 'rm_category' && Array.isArray(value) && value.length > 0) {
+      const currentShapes = Array.isArray(prev.rm_subcategory) ? prev.rm_subcategory : [];
+      nextFilters.rm_subcategory = currentShapes.filter((shapeStr) => {
+        if (!shapeStr.includes(' : ')) return true;
+        const ctg = shapeStr.split(' : ')[1]?.trim();
+        return value.includes(ctg);
+      });
+    }
 
- const handleBadgeClick = (filterKey, value) => {
+    return nextFilters;
+  });
+  setCurrentPage(1);
+};
+
+  const handleBadgeClick = (filterKey, value) => {
     if (!value || value === '-') return;
-
     setFilters((prev) => {
       const currentList = Array.isArray(prev[filterKey]) ? prev[filterKey] : [];
-      
-      // If already active, toggle it OFF (remove it)
       if (currentList.includes(value)) {
-        return {
-          ...prev,
-          [filterKey]: currentList.filter((item) => item !== value)
-        };
+        return { ...prev, [filterKey]: currentList.filter((item) => item !== value) };
       }
-      
-      // If not active, toggle it ON (append it)
-      return {
-        ...prev,
-        [filterKey]: [...currentList, value]
-      };
+      return { ...prev, [filterKey]: [...currentList, value] };
     });
   };
 
@@ -192,11 +231,8 @@ export default function App() {
     const code = item.Dmcd || item.drcd;
     setShortlistedMap((prev) => {
       const next = new Map(prev);
-      if (next.has(code)) {
-        next.delete(code);
-      } else {
-        next.set(code, item);
-      }
+      if (next.has(code)) next.delete(code);
+      else next.set(code, item);
       return next;
     });
   };
@@ -220,9 +256,7 @@ export default function App() {
       setShortlistAllBtnText('⭐ Shortlist All Filtered Results');
     } finally {
       setIsShortlistingAll(false);
-      setTimeout(() => {
-        setShortlistAllBtnText('⭐ Shortlist All Filtered Results');
-      }, 2000);
+      setTimeout(() => setShortlistAllBtnText('⭐ Shortlist All Filtered Results'), 2000);
     }
   };
 
@@ -239,7 +273,6 @@ export default function App() {
     }
   };
 
-  // Export process runner with live polling
   const runExport = async (exportType, perRow = 4) => {
     const items = Array.from(shortlistedMap.values());
     if (items.length === 0) {
@@ -255,19 +288,13 @@ export default function App() {
 
     try {
       const { job_id } = await startExportJob(items, exportType, perRow);
-
       const poll = setInterval(async () => {
         try {
           const prog = await getExportProgress(job_id);
-
           if (prog.status === 'processing') {
             setExportModal((prev) => ({
               ...prev,
-              progress: {
-                percent: prog.percent,
-                current: prog.current,
-                total: prog.total,
-              },
+              progress: { percent: prog.percent, current: prog.current, total: prog.total },
             }));
           } else if (prog.status === 'completed') {
             clearInterval(poll);
@@ -275,13 +302,8 @@ export default function App() {
               ...prev,
               progress: { percent: 100, current: prog.total, total: prog.total },
             }));
-
-            // Download file
             window.location.href = getExportDownloadUrl(job_id);
-
-            setTimeout(() => {
-              setExportModal((prev) => ({ ...prev, isOpen: false }));
-            }, 600);
+            setTimeout(() => setExportModal((prev) => ({ ...prev, isOpen: false })), 600);
           } else if (prog.status === 'failed') {
             clearInterval(poll);
             setExportModal((prev) => ({ ...prev, isOpen: false }));
@@ -299,12 +321,26 @@ export default function App() {
     }
   };
 
+  // 1. Initial auth verification check
+  if (isVerifyingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white text-xs font-semibold tracking-wider animate-pulse">
+          AUTHENTICATING SESSION...
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Gatekeeper: If user is not logged in, show Login Page
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={(user) => setCurrentUser(user)} />;
+  }
+
   return (
     <div className="bg-slate-50 text-slate-900 font-sans min-h-screen flex flex-col">
-      {/* Full screen loader until backend finishes background index */}
       {!isBackendReady && <InitialLoader onReady={() => setIsBackendReady(true)} />}
 
-      {/* Navigation Header */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={(tab) => {
@@ -319,63 +355,71 @@ export default function App() {
         totalItems={totalItems}                              
         onShortlistAllFiltered={handleShortlistAllFiltered}  
         isShortlistingAll={isShortlistingAll}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
-      {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 w-full">
-        {/* Sidebar visible only in 'Explore' tab */}
-        {activeTab === 'explore' && (
-          <div className="md:col-span-1">
-            <FilterSidebar
-              options={filterOptions}
-              filters={filters}
-              onFilterChange={handleFilterChange}
-              onReset={handleResetFilters}
-              onShortlistAllFiltered={handleShortlistAllFiltered}
-              shortlistAllBtnText={shortlistAllBtnText}
-            />
-          </div>
-        )}
+      {/* Render Users Admin Panel when "users" tab is active */}
+      {activeTab === 'users' ? (
+        <main className="flex-1">
+          <UserManager />
+        </main>
+      ) : (
+        /* Regular Explore and Shortlist views */
+        <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 w-full">
+          {activeTab === 'explore' && (
+            <div className="md:col-span-1">
+              <FilterSidebar
+                options={filterOptions}
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                onReset={handleResetFilters}
+                onShortlistAllFiltered={handleShortlistAllFiltered}
+                shortlistAllBtnText={shortlistAllBtnText}
+              />
+            </div>
+          )}
 
-        {/* Product Grid and Pagination */}
-        <ProductGrid
-          items={products}
-          totalItems={totalItems}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          pageSize={pageSize}
-          activeTab={activeTab}
-          shortlistedMap={shortlistedMap}
-          cataloguePerRow={cataloguePerRow}
-          filters={filters}
-          onOpenDesigners={(item) => setDesignerItem(item)}
-          onBadgeClick={handleBadgeClick}
-          setCataloguePerRow={setCataloguePerRow}
-          onPageChange={(page) => {
-            setCurrentPage(page);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          onPageSizeChange={(sz) => {
-            setPageSize(sz);
-            setCurrentPage(1);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          onToggleShortlist={handleToggleShortlist}
-          onOpenZoom={(item) => setZoomItem(item)}          onOpenRmDetails={(code) => setRmCode(code)}
-          onExportRowWise={() => runExport('row')}
-          onExportCatalogue={() => runExport('catalogue', cataloguePerRow)}
-          onOpenClearConfirm={() => {
-            if (shortlistedMap.size > 0) setIsClearModalOpen(true);
-          }}
-        />
-      </div>
+          <ProductGrid
+            items={products}
+            totalItems={totalItems}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            activeTab={activeTab}
+            shortlistedMap={shortlistedMap}
+            cataloguePerRow={cataloguePerRow}
+            filters={filters}
+            onOpenDesigners={(item) => setDesignerItem(item)}
+            onBadgeClick={handleBadgeClick}
+            setCataloguePerRow={setCataloguePerRow}
+            onPageChange={(page) => {
+              setCurrentPage(page);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onPageSizeChange={(sz) => {
+              setPageSize(sz);
+              setCurrentPage(1);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onToggleShortlist={handleToggleShortlist}
+            onOpenZoom={(item) => setZoomItem(item)}
+            onOpenRmDetails={(code) => setRmCode(code)}
+            onExportRowWise={() => runExport('row')}
+            onExportCatalogue={() => runExport('catalogue', cataloguePerRow)}
+            onOpenClearConfirm={() => {
+              if (shortlistedMap.size > 0) setIsClearModalOpen(true);
+            }}
+          />
+        </div>
+      )}
 
       {/* Modals */}
       <ImageZoomModal
-     isOpen={Boolean(zoomItem)}
-     item={zoomItem}
-     onClose={() => setZoomItem(null)}
-   />
+        isOpen={Boolean(zoomItem)}
+        item={zoomItem}
+        onClose={() => setZoomItem(null)}
+      />
 
       <StoneBreakdownModal
         isOpen={Boolean(rmCode)}
