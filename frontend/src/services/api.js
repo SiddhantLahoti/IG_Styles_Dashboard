@@ -115,17 +115,17 @@ export async function getSyncStatus() {
 }
 
 // 2. Filter Dropdown Options (Protected)
-export async function getFilterOptions(filters = {}, search = '') {
+export async function getFilterOptions(filters = {}, search = '', signal = null) {
   const query = buildQueryParams(filters, null, null, search);
-  const res = await authFetch(`/api/filters${query ? `?${query}` : ''}`);
+  const res = await authFetch(`/api/filters${query ? `?${query}` : ''}`, { signal });
   if (!res.ok) throw new Error('Failed to fetch filter options');
   return res.json();
 }
 
 // 3. Paginated Products (Protected)
-export async function getProducts(filters, page, pageSize, search) {
+export async function getProducts(filters, page, pageSize, search, signal = null) {
   const query = buildQueryParams(filters, page, pageSize, search);
-  const res = await authFetch(`/api/products?${query}`);
+  const res = await authFetch(`/api/products?${query}`, { signal });
   if (!res.ok) throw new Error('Failed to fetch products');
   return res.json();
 }

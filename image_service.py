@@ -135,8 +135,7 @@ def index_image_directories():
                                         mtime = 0.0
                                     raw_cad_files.append((stem, Path(entry.path), mtime))
                                     file_count += 1
-                                    if file_count % 2000 == 0:
-                                        print(f"       -> Scanned {file_count:,} CAD files so far...")
+                                    
                             elif entry.is_dir(follow_symlinks=False):
                                 fast_scan(entry.path)
                 except (PermissionError, OSError):

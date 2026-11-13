@@ -191,8 +191,7 @@ def build_sqlite_database():
 
     for idx, s in enumerate(styles_list, start=1):
         img_records.append(get_all_image_paths_for_style(s))
-        if idx % 2000 == 0 or idx == total_styles:
-            print(f"       -> Resolved {idx:,} / {total_styles:,} styles...")
+        
 
     df_a["image_500_path"] = [r["image_500_path"] for r in img_records]
     df_a["image_ld_path"] = [r["image_ld_path"] for r in img_records]
@@ -256,6 +255,16 @@ def build_sqlite_database():
             f"CREATE INDEX IF NOT EXISTS idx_styles_ctg ON styles ({COL_CTG_DESC});",
             f"CREATE INDEX IF NOT EXISTS idx_styles_sal1 ON styles ({COL_SAL_CTG1});",
             f"CREATE INDEX IF NOT EXISTS idx_styles_sal2 ON styles ({COL_SAL_CTG2});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_brand ON styles ({COL_BRAND});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_tone ON styles ({COL_TONE});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_color ON styles ({COL_COLOR});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_setcd ON styles ({COL_SET_CD});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_con1 ON styles ({COL_CON_BY_DESC});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_con2 ON styles ({COL_CON_BY_DESC1});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_creat1 ON styles ({COL_CREAT_BY_DESC});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_creat2 ON styles ({COL_CREAT_BY_DESC1});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_wet1 ON styles ({COL_WET_BY_DESC});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_wet2 ON styles ({COL_WET_BY_DESC1});",
             f"CREATE INDEX IF NOT EXISTS idx_styles_cust ON styles ({COL_CUSTOMER});",
             f"CREATE INDEX IF NOT EXISTS idx_styles_metal ON styles ({COL_METAL});",
             f"CREATE INDEX IF NOT EXISTS idx_styles_size ON styles ({COL_SIZE});",
@@ -263,15 +272,13 @@ def build_sqlite_database():
             f"CREATE INDEX IF NOT EXISTS idx_styles_totwt ON styles ({COL_TOTAL_WT});",
             f"CREATE INDEX IF NOT EXISTS idx_styles_rm_stones_wt ON styles (rm_stones_wt);",
             f"CREATE INDEX IF NOT EXISTS idx_styles_img ON styles (image_source);",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_img_cad ON styles (image_cad_path);",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_img_500 ON styles (image_500_path);",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_img_ld ON styles (image_ld_path);",
             f"CREATE INDEX IF NOT EXISTS idx_stone_dsg_ctg ON stone_items ({COL_RM_DSG}, {COL_RM_CTG});",
             f"CREATE INDEX IF NOT EXISTS idx_stone_subctg ON stone_items ({COL_RM_SUBCTG});",
             f"CREATE INDEX IF NOT EXISTS idx_stone_sieve ON stone_items ({COL_RM_LN1}, {COL_RM_LN2});",
             f"CREATE INDEX IF NOT EXISTS idx_stone_pointed ON stone_items ({COL_RM_CTG}, pointed_wt, {COL_RM_DSG});",
-            f"CREATE INDEX IF NOT EXISTS idx_styles_img ON styles (image_source);",
-            f"CREATE INDEX IF NOT EXISTS idx_styles_img_cad ON styles (image_cad_path);",
-            f"CREATE INDEX IF NOT EXISTS idx_styles_img_500 ON styles (image_500_path);",
-            f"CREATE INDEX IF NOT EXISTS idx_styles_img_ld ON styles (image_ld_path);"
-            
         ]
         for sql in indexes:
             conn.execute(sql)
@@ -307,8 +314,8 @@ def load_data(force_reload: bool = False):
     with _lock:
         if force_reload:
             print("[INFO] Triggering Excel SQL refresh (Data -> Refresh All)...")
-            # refresh_excel_file_via_app(EXCEL_FILE_A)
-            # refresh_excel_file_via_app(EXCEL_FILE_B)
+            refresh_excel_file_via_app(EXCEL_FILE_A)
+            refresh_excel_file_via_app(EXCEL_FILE_B)
         mtime_a = os.path.getmtime(EXCEL_FILE_A) if os.path.exists(EXCEL_FILE_A) else 0
         mtime_b = os.path.getmtime(EXCEL_FILE_B) if os.path.exists(EXCEL_FILE_B) else 0
         db_mtime = os.path.getmtime(DB_PATH) if os.path.exists(DB_PATH) else 0

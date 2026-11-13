@@ -41,23 +41,40 @@ export default function FilterSidebar({
   options = {},
   filters = {},
   onFilterChange,
+  onApply,
+  hasUnappliedChanges = false,
   onReset,
-  onShortlistAllFiltered,
-  shortlistAllBtnText,
 }) {
   return (
     <aside className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 h-fit">
-      {/* Header */}
-      <div className="flex justify-between items-center pb-2 border-b">
-        <h2 className="font-semibold text-sm uppercase text-slate-700 tracking-wider">Filters</h2>
-        <button
-          type="button"
-          onClick={onReset}
-          className="text-xs text-indigo-600 hover:underline font-medium cursor-pointer"
-        >
-          Reset All
-        </button>
-      </div>
+      {/* Header + Apply Action */}
+   <div className="space-y-2.5 pb-3 border-b border-slate-200 sticky top-14 z-10 bg-white pt-1">
+     <div className="flex justify-between items-center">
+       <h2 className="font-semibold text-sm uppercase text-slate-700 tracking-wider">Filters</h2>
+       <button
+         type="button"
+         onClick={onReset}
+         className="text-xs text-slate-500 hover:text-rose-600 hover:underline font-medium cursor-pointer"
+       >
+         Reset All
+       </button>
+     </div>
+
+     <button
+       type="button"
+       onClick={onApply}
+       className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+         hasUnappliedChanges
+           ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md ring-2 ring-indigo-200'
+           : 'bg-slate-800 hover:bg-slate-900 text-white shadow-2xs'
+       }`}
+     >
+       <span>Apply Filters</span>
+       {hasUnappliedChanges && (
+         <span className="w-2 h-2 rounded-full bg-amber-300 animate-pulse" />
+       )}
+     </button>
+   </div>
 
       {/* Lab Grown / Diamond Origin Filter */}
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1.5">

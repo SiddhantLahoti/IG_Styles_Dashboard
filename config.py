@@ -9,16 +9,16 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "fallback-secret-key-change-in-env")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
+JWT_EXPIRATION_HOURS = 9
 
 # 1. Dual Excel File Paths
-EXCEL_FILE_A = os.path.join(BASE_DIR, "Design Detail & Ana_v3.xlsx")
+EXCEL_FILE_A = os.path.join(BASE_DIR, "Design Detail & Ana_v4(fixed_totalwt_sqlquery).xlsx")
 EXCEL_FILE_B = os.path.join(BASE_DIR, "Design Rm Detail_v3.xlsx")
 
 # --- Image Folder Paths (Keep your actual paths) ---
-PRIMARY_IMG_DIR = r"Y:\\"
-FALLBACK_IMG_DIR = r"Z:\LD"
-CAD_IMG_DIR = r"X:\CAD-JPG"
+PRIMARY_IMG_DIR = r"\\192.168.6.152\ignetmain\F-Drive\Individuals\SALES-MKTG\500x500"
+FALLBACK_IMG_DIR = r"\\192.168.6.55\mwpict\LD"
+CAD_IMG_DIR = r"\\192.168.6.152\cad-srv\DXF-JPG\CAD-JPG"
 IMAGE_CACHE_DIR = os.path.join(BASE_DIR, ".cache_images")
 
 # 2. File A Column Definitions (Master Styles)

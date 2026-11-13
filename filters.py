@@ -376,11 +376,6 @@ def apply_filters_and_paginate(
         else:
             item[COL_DATE] = "-"
 
-        style_cd = item[COL_STYLE]
-        cur.execute(f"SELECT DISTINCT {COL_RM_SUBCTG} FROM stone_items WHERE {COL_RM_DSG} = ? AND {COL_RM_SUBCTG} != '';", (style_cd,))
-        shapes = [r[0] for r in cur.fetchall()]
-        item["rm_subctgs"] = shapes
-
     conn.close()
 
     return {
@@ -434,35 +429,66 @@ def get_cascading_filter_options(
     cur = conn.cursor()
 
     def get_dim_uniques(col_name: str, dim_name: str) -> List[str]:
-        where_sql, params = _build_where_clause(
-            search_query=search_query, lab_grown=lab_grown, image_source=image_source,
-            sieve_match_mode=sieve_match_mode, categories=categories, sales_cat1=sales_cat1,
-            sales_cat2=sales_cat2, brands=brands, tones=tones, customers=customers,
-            metals=metals, colors=colors, set_codes=set_codes,has_set=has_set, sizes=sizes,
-            concept_designers=concept_designers, creative_designers=creative_designers,
-            weight_designers=weight_designers, start_date=start_date, end_date=end_date,
-            min_total_wt=min_total_wt, max_total_wt=max_total_wt, min_wax_wt=min_wax_wt,min_pointed_wt=min_pointed_wt, max_pointed_wt=max_pointed_wt,
-            max_wax_wt=max_wax_wt, rm_categories=rm_categories, rm_subcategories=rm_subcategories,
-            ln1=ln1, ln2=ln2, min_rm_wt=min_rm_wt, max_rm_wt=max_rm_wt,only_diamonds=only_diamonds,
-            exclude_dim=dim_name
-        )
-        cur.execute(f"SELECT DISTINCT {col_name} FROM styles WHERE {where_sql} AND {col_name} IS NOT NULL AND {col_name} != '' ORDER BY {col_name} ASC;", params)
-        return [r[0] for r in cur.fetchall()]
+     where_sql, params = _build_where_clause(
+         search_query=search_query, lab_grown=lab_grown, image_source=image_source,
+         sieve_match_mode=sieve_match_mode, categories=categories, sales_cat1=sales_cat1,
+         sales_cat2=sales_cat2, brands=brands, tones=tones, customers=customers,
+         metals=metals, colors=colors, set_codes=set_codes, has_set=has_set, sizes=sizes,
+         concept_designers=concept_designers, creative_designers=creative_designers,
+         weight_designers=weight_designers, start_date=start_date, end_date=end_date,
+         min_total_wt=min_total_wt, max_total_wt=max_total_wt, min_wax_wt=min_wax_wt,
+         min_pointed_wt=min_pointed_wt, max_pointed_wt=max_pointed_wt,
+         max_wax_wt=max_wax_wt, rm_categories=rm_categories, rm_subcategories=rm_subcategories,
+         ln1=ln1, ln2=ln2, min_rm_wt=min_rm_wt, max_rm_wt=max_rm_wt, only_diamonds=only_diamonds,
+         exclude_dim=dim_name
+     )
+     cur.execute(
+         f"SELECT DISTINCT {col_name} FROM styles WHERE {where_sql} AND {col_name} IS NOT NULL AND {col_name} != '' ORDER BY {col_name} ASC;",
+         params
+     )
+     return [r[0] for r in cur.fetchall()]
 
-    # Fast indexed cascading queries
-    categories_res = get_dim_uniques(COL_CTG_DESC, "categories")
-    sizes_res = get_dim_uniques(COL_SIZE, "sizes")
-    sales_cat1_res = get_dim_uniques(COL_SAL_CTG1, "sales_categories1")
-    sales_cat2_res = get_dim_uniques(COL_SAL_CTG2, "sales_categories2")
-    brands_res = get_dim_uniques(COL_BRAND, "brands")
-    tones_res = get_dim_uniques(COL_TONE, "tones")
-    customers_res = get_dim_uniques(COL_CUSTOMER, "customers")
-    metals_res = get_dim_uniques(COL_METAL, "metals")
-    colors_res = get_dim_uniques(COL_COLOR, "colors")
-    set_codes_res = get_dim_uniques(COL_SET_CD, "set_codes")
-    concept_res = get_dim_uniques(COL_CON_BY_DESC, "concept_designers")
-    creative_res = get_dim_uniques(COL_CREAT_BY_DESC, "creative_designers")
-    weight_res = get_dim_uniques(COL_WET_BY_DESC, "weight_designers")
+    # 1-pass query for all unselected dropdowns
+    base_where, base_params = _build_where_clause(
+        search_query=search_query, lab_grown=lab_grown, image_source=image_source,
+        sieve_match_mode=sieve_match_mode, categories=categories, sales_cat1=sales_cat1,
+        sales_cat2=sales_cat2, brands=brands, tones=tones, customers=customers,
+        metals=metals, colors=colors, set_codes=set_codes, has_set=has_set, sizes=sizes,
+        concept_designers=concept_designers, creative_designers=creative_designers,
+        weight_designers=weight_designers, start_date=start_date, end_date=end_date,
+        min_total_wt=min_total_wt, max_total_wt=max_total_wt, min_wax_wt=min_wax_wt,
+        max_wax_wt=max_wax_wt, min_pointed_wt=min_pointed_wt, max_pointed_wt=max_pointed_wt,
+        rm_categories=rm_categories, rm_subcategories=rm_subcategories,
+        ln1=ln1, ln2=ln2, min_rm_wt=min_rm_wt, max_rm_wt=max_rm_wt, only_diamonds=only_diamonds
+    )
+    cur.execute(f"""
+        SELECT DISTINCT 
+            {COL_CTG_DESC}, {COL_SIZE}, {COL_SAL_CTG1}, {COL_SAL_CTG2},
+            {COL_BRAND}, {COL_TONE}, {COL_CUSTOMER}, {COL_METAL},
+            {COL_COLOR}, {COL_SET_CD}, {COL_CON_BY_DESC}, {COL_CREAT_BY_DESC}, {COL_WET_BY_DESC}
+        FROM styles WHERE {base_where};
+    """, base_params)
+
+    sets = [set() for _ in range(13)]
+    for row in cur.fetchall():
+        for i, val in enumerate(row):
+            if val:
+                sets[i].add(val)
+
+    # Only re-query individually if a filter IS active on that specific dropdown
+    categories_res = get_dim_uniques(COL_CTG_DESC, "categories") if categories else sorted(sets[0])
+    sizes_res = get_dim_uniques(COL_SIZE, "sizes") if sizes else sorted(sets[1])
+    sales_cat1_res = get_dim_uniques(COL_SAL_CTG1, "sales_categories1") if sales_cat1 else sorted(sets[2])
+    sales_cat2_res = get_dim_uniques(COL_SAL_CTG2, "sales_categories2") if sales_cat2 else sorted(sets[3])
+    brands_res = get_dim_uniques(COL_BRAND, "brands") if brands else sorted(sets[4])
+    tones_res = get_dim_uniques(COL_TONE, "tones") if tones else sorted(sets[5])
+    customers_res = get_dim_uniques(COL_CUSTOMER, "customers") if customers else sorted(sets[6])
+    metals_res = get_dim_uniques(COL_METAL, "metals") if metals else sorted(sets[7])
+    colors_res = get_dim_uniques(COL_COLOR, "colors") if colors else sorted(sets[8])
+    set_codes_res = get_dim_uniques(COL_SET_CD, "set_codes") if set_codes else sorted(sets[9])
+    concept_res = get_dim_uniques(COL_CON_BY_DESC, "concept_designers") if concept_designers else sorted(sets[10])
+    creative_res = get_dim_uniques(COL_CREAT_BY_DESC, "creative_designers") if creative_designers else sorted(sets[11])
+    weight_res = get_dim_uniques(COL_WET_BY_DESC, "weight_designers") if weight_designers else sorted(sets[12])
 
     # Cascading Stone Types & Shapes (Queried from lightweight stone_shape_categories table)
     # 1. Stone Shapes available for the current stone types, paired as "SHAPE : CTG"

@@ -70,8 +70,9 @@ export default function App() {
 
   // Filters and Dropdown Options
   const [filterOptions, setFilterOptions] = useState({});
-  const [filters, setFilters] = useState(initialFilters);
-  const [shortlistAllBtnText, setShortlistAllBtnText] = useState('⭐ Shortlist All Filtered Results');
+  const [draftFilters, setDraftFilters] = useState(initialFilters);
+  const [appliedFilters, setAppliedFilters] = useState(initialFilters);
+  const hasUnappliedChanges = JSON.stringify(draftFilters) !== JSON.stringify(appliedFilters);  const [shortlistAllBtnText, setShortlistAllBtnText] = useState('⭐ Shortlist All Filtered Results');
 
   // Product Data & Pagination
   const [products, setProducts] = useState([]);
@@ -135,31 +136,36 @@ export default function App() {
 
   // Load cascading filter options
   useEffect(() => {
-    if (!isBackendReady || !currentUser || activeTab === 'users') return;
+  if (!isBackendReady || !currentUser || activeTab === 'users') return;
 
-    getFilterOptions(filters, debouncedSearch)
-      .then((opts) => setFilterOptions(opts || {}))
-      .catch((err) => console.error('Failed to load filter options:', err));
-  }, [isBackendReady, currentUser, activeTab, filters, debouncedSearch]);
+  const controller = new AbortController();
+  getFilterOptions(draftFilters, debouncedSearch, controller.signal)
+    .then((opts) => setFilterOptions(opts || {}))
+    .catch((err) => {
+      if (err.name !== 'AbortError') console.error('Failed to load filter options:', err);
+    });
+
+  return () => controller.abort();
+}, [isBackendReady, currentUser, activeTab, draftFilters, debouncedSearch]);
 
   // Fetch products for "Explore" tab
-  const fetchExploreProducts = useCallback(async () => {
-    try {
-      const data = await getProducts(filters, currentPage, pageSize, debouncedSearch);
-      setProducts(data.items || []);
-      setTotalItems(data.total_items || 0);
-      setTotalPages(data.total_pages || 1);
-    } catch (err) {
-      console.error('Error fetching products:', err);
-    }
-  }, [filters, currentPage, pageSize, debouncedSearch]);
+  const fetchExploreProducts = useCallback(async (signal) => {
+  try {
+    const data = await getProducts(appliedFilters, currentPage, pageSize, debouncedSearch, signal);
+    setProducts(data.items || []);
+    setTotalItems(data.total_items || 0);
+    setTotalPages(data.total_pages || 1);
+  } catch (err) {
+    if (err.name !== 'AbortError') console.error('Error fetching products:', err);
+  }
+}, [appliedFilters, currentPage, pageSize, debouncedSearch]);
 
-  // Update view on tab or filter change
   useEffect(() => {
     if (!isBackendReady || !currentUser) return;
 
+    const controller = new AbortController();
     if (activeTab === 'explore') {
-      fetchExploreProducts();
+      fetchExploreProducts(controller.signal);
     } else if (activeTab === 'shortlist') {
       const allShortlisted = Array.from(shortlistedMap.values());
       const total = allShortlisted.length;
@@ -175,14 +181,14 @@ export default function App() {
         setCurrentPage(validPage);
       }
     }
+    return () => controller.abort();
   }, [isBackendReady, currentUser, activeTab, fetchExploreProducts, shortlistedMap, currentPage, pageSize]);
 
   // Handlers
   const handleFilterChange = (field, value) => {
-  setFilters((prev) => {
+  setDraftFilters((prev) => {
     const nextFilters = { ...prev, [field]: value };
 
-    // If 'Only Diamonds' is checked, remove Category 'C' and any 'C' shapes from active filters
     if (field === 'only_diamonds' && value === true) {
       if (Array.isArray(prev.rm_category)) {
         nextFilters.rm_category = prev.rm_category.filter((c) => c !== 'C');
@@ -194,7 +200,6 @@ export default function App() {
       }
     }
 
-    // If stone type (rm_category) changes, keep existing shape filtering logic
     if (field === 'rm_category' && Array.isArray(value) && value.length > 0) {
       const currentShapes = Array.isArray(prev.rm_subcategory) ? prev.rm_subcategory : [];
       nextFilters.rm_subcategory = currentShapes.filter((shapeStr) => {
@@ -206,22 +211,33 @@ export default function App() {
 
     return nextFilters;
   });
-  setCurrentPage(1);
 };
+
+  const handleApplyFilters = () => {
+    setDraftFilters((latestDraft) => {
+      setAppliedFilters(latestDraft);
+      return latestDraft;
+    });
+    setCurrentPage(1);
+  };
 
   const handleBadgeClick = (filterKey, value) => {
     if (!value || value === '-') return;
-    setFilters((prev) => {
+    const toggleFn = (prev) => {
       const currentList = Array.isArray(prev[filterKey]) ? prev[filterKey] : [];
       if (currentList.includes(value)) {
         return { ...prev, [filterKey]: currentList.filter((item) => item !== value) };
       }
       return { ...prev, [filterKey]: [...currentList, value] };
-    });
+    };
+    setDraftFilters(toggleFn);
+    setAppliedFilters(toggleFn);
+    setCurrentPage(1);
   };
 
   const handleResetFilters = () => {
-    setFilters(initialFilters);
+    setDraftFilters(initialFilters);
+    setAppliedFilters(initialFilters);
     setSearchQuery('');
     setDebouncedSearch('');
     setCurrentPage(1);
@@ -241,7 +257,7 @@ export default function App() {
     setIsShortlistingAll(true);
     setShortlistAllBtnText('⏳ Adding all matching items...');
     try {
-      const res = await getAllFilteredProducts(filters, debouncedSearch);
+      const res = await getAllFilteredProducts(appliedFilters, debouncedSearch)
       setShortlistedMap((prev) => {
         const next = new Map(prev);
         (res.items || []).forEach((it) => {
@@ -371,7 +387,9 @@ export default function App() {
             <div className="md:col-span-1">
               <FilterSidebar
                 options={filterOptions}
-                filters={filters}
+                filters={draftFilters}
+                onApply={handleApplyFilters}
+                hasUnappliedChanges={hasUnappliedChanges}
                 onFilterChange={handleFilterChange}
                 onReset={handleResetFilters}
                 onShortlistAllFiltered={handleShortlistAllFiltered}
@@ -389,7 +407,7 @@ export default function App() {
             activeTab={activeTab}
             shortlistedMap={shortlistedMap}
             cataloguePerRow={cataloguePerRow}
-            filters={filters}
+            filters={appliedFilters}
             onOpenDesigners={(item) => setDesignerItem(item)}
             onBadgeClick={handleBadgeClick}
             setCataloguePerRow={setCataloguePerRow}
