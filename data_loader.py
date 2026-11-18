@@ -197,7 +197,8 @@ def build_sqlite_database():
     df_a["image_ld_path"] = [r["image_ld_path"] for r in img_records]
     df_a["image_cad_path"] = [r["image_cad_path"] for r in img_records]
     df_a["image_source"] = [r["image_source"] for r in img_records]
-
+    df_a["biodata_excel_path"] = [r["biodata_excel_path"] for r in img_records]
+    
     # 2. Read and clean File B
     print("[INFO] Reading File B (Design Rm Detail)...")
     df_b = pd.read_excel(
@@ -279,6 +280,8 @@ def build_sqlite_database():
             f"CREATE INDEX IF NOT EXISTS idx_stone_subctg ON stone_items ({COL_RM_SUBCTG});",
             f"CREATE INDEX IF NOT EXISTS idx_stone_sieve ON stone_items ({COL_RM_LN1}, {COL_RM_LN2});",
             f"CREATE INDEX IF NOT EXISTS idx_stone_pointed ON stone_items ({COL_RM_CTG}, pointed_wt, {COL_RM_DSG});",
+            f"CREATE INDEX IF NOT EXISTS idx_styles_biodata ON styles (biodata_excel_path);",
+        
         ]
         for sql in indexes:
             conn.execute(sql)
@@ -314,8 +317,8 @@ def load_data(force_reload: bool = False):
     with _lock:
         if force_reload:
             print("[INFO] Triggering Excel SQL refresh (Data -> Refresh All)...")
-            refresh_excel_file_via_app(EXCEL_FILE_A)
-            refresh_excel_file_via_app(EXCEL_FILE_B)
+            #refresh_excel_file_via_app(EXCEL_FILE_A)
+            #refresh_excel_file_via_app(EXCEL_FILE_B)
         mtime_a = os.path.getmtime(EXCEL_FILE_A) if os.path.exists(EXCEL_FILE_A) else 0
         mtime_b = os.path.getmtime(EXCEL_FILE_B) if os.path.exists(EXCEL_FILE_B) else 0
         db_mtime = os.path.getmtime(DB_PATH) if os.path.exists(DB_PATH) else 0

@@ -19,7 +19,7 @@ def get_unique_filter_options(df=None) -> dict:
 def _build_where_clause(
     search_query: Optional[str] = None,
     lab_grown: Optional[str] = None,
-    image_source: Optional[str] = None,
+    image_source: Optional[List[str]] = None,
     sieve_match_mode: Optional[str] = "any",
     categories: Optional[List[str]] = None,
     sales_cat1: Optional[List[str]] = None,
@@ -72,9 +72,21 @@ def _build_where_clause(
     elif lab_grown == "natural":
         where_clauses.append(f"UPPER({COL_STYLE}) NOT LIKE 'L-%'")
 
-    if image_source in ["primary", "secondary", "none"]:
-        where_clauses.append("image_source = ?")
-        params.append(image_source)
+    if image_source:
+        asset_sql_map = {
+            "500_present": "(image_500_path IS NOT NULL AND image_500_path != '')",
+            "500_missing": "(image_500_path IS NULL OR image_500_path = '')",
+            "sketch_present": "(image_ld_path IS NOT NULL AND image_ld_path != '')",
+            "sketch_missing": "(image_ld_path IS NULL OR image_ld_path = '')",
+            "cad_present": "(image_cad_path IS NOT NULL AND image_cad_path != '')",
+            "cad_missing": "(image_cad_path IS NULL OR image_cad_path = '')",
+            "biodata_present": "(biodata_excel_path IS NOT NULL AND biodata_excel_path != '')",
+            "biodata_missing": "(biodata_excel_path IS NULL OR biodata_excel_path = '')",
+        }
+        for cond_key in image_source:
+            sql_frag = asset_sql_map.get(cond_key)
+            if sql_frag:
+                where_clauses.append(sql_frag)
 
     # Multi-select dimensions (respecting exclude_dim for Excel cascade)
     dim_map = {
@@ -267,7 +279,7 @@ def apply_filters_and_paginate(
     df=None,
     search_query: Optional[str] = None,
     lab_grown: Optional[str] = None,
-    image_source: Optional[str] = None,
+    image_source: Optional[List[str]] = None,
     sieve_match_mode: Optional[str] = "any",
     categories: Optional[List[str]] = None,
     sales_cat1: Optional[List[str]] = None,
@@ -362,6 +374,7 @@ def apply_filters_and_paginate(
         item["has_500"] = bool(item.get("image_500_path"))
         item["has_ld"] = bool(item.get("image_ld_path"))
         item["has_cad"] = bool(item.get("image_cad_path"))
+        item["has_biodata"] = bool(item.get("biodata_excel_path"))
         raw_date = str(item.get(COL_DATE) or "").split(" ")[0].strip()
         if raw_date and raw_date != "-":
             # Handles YYYY-MM-DD or DD-MM-YYYY formats cleanly
@@ -391,7 +404,7 @@ def get_cascading_filter_options(
     df=None,
     search_query: Optional[str] = None,
     lab_grown: Optional[str] = None,
-    image_source: Optional[str] = None,
+    image_source: Optional[List[str]] = None,
     sieve_match_mode: Optional[str] = "any",
     categories: Optional[List[str]] = None,
     sizes: Optional[List[str]] = None,

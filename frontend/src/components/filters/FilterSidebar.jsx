@@ -45,10 +45,21 @@ export default function FilterSidebar({
   hasUnappliedChanges = false,
   onReset,
 }) {
+  const activeAssets = Array.isArray(filters.image_source) ? filters.image_source : [];
+
+  const toggleAssetCondition = (assetKey, stateType) => {
+    const targetVal = `${assetKey}_${stateType}`;
+    const oppositeVal = `${assetKey}_${stateType === 'present' ? 'missing' : 'present'}`;
+    // Remove opposite state for the same asset; toggle target state on/off
+    const cleaned = activeAssets.filter((v) => v !== oppositeVal && v !== targetVal);
+    const next = activeAssets.includes(targetVal) ? cleaned : [...cleaned, targetVal];
+    onFilterChange('image_source', next);
+  };
+
   return (
-    <aside className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 h-fit">
+    <aside className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5 h-fit">
       {/* Header + Apply Action */}
-   <div className="space-y-2.5 pb-3 border-b border-slate-200 sticky top-14 z-10 bg-white pt-1">
+      <div className="space-y-2 pb-2.5 border-b border-slate-200 sticky top-14 z-10 bg-white pt-0.5">
      <div className="flex justify-between items-center">
        <h2 className="font-semibold text-sm uppercase text-slate-700 tracking-wider">Filters</h2>
        <button
@@ -106,40 +117,11 @@ export default function FilterSidebar({
         </div>
       </div>
 
-      {/* Image Source Filter */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1.5">
-        <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide">
-          Image Source
-        </label>
-        <div className="grid grid-cols-4 gap-1 text-[11px]">
-          {[
-            { label: 'All', value: '' },
-            { label: '500x500', value: 'primary' },
-            { label: 'Sketch', value: 'secondary' },
-            { label: 'Missing', value: 'none' },
-          ].map((option) => {
-            const isSelected = (filters.image_source || '') === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => onFilterChange('image_source', option.value)}
-                className={`py-1 px-1 rounded text-center font-medium transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-indigo-600 text-white shadow-sm font-bold'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      
 
       {/* Creation Date Range */}
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Creation Date</label>
+        <label className="block text-xs font-medium text-slate-600 mb-0.5">Creation Date</label>
         <div className="grid grid-cols-2 gap-2">
           <BufferedInput
             type="date"
@@ -190,13 +172,13 @@ export default function FilterSidebar({
       />
 
       {/* File B Raw Material Divider */}
-      <div className="pt-3 border-t border-slate-200">
-        <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block mb-2">
+      <div className="pt-2 border-t border-slate-200">
+        <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block mb-1">
           💎 Raw Materials
         </span>
       </div>
           {/* Only Diamonds Checkbox */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -279,7 +261,7 @@ export default function FilterSidebar({
       {/* Sieve Sizes */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Sieve 1 (Ln1)</label>
+          <label className="block text-xs font-medium text-slate-600 mb-0.5">Sieve 1 (Ln1)</label>
           <BufferedInput
             placeholder="e.g. 1.50"
             value={filters.ln1 ?? ''}
@@ -288,7 +270,7 @@ export default function FilterSidebar({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Sieve 2 (Ln2)</label>
+          <label className="block text-xs font-medium text-slate-600 mb-0.5">Sieve 2 (Ln2)</label>
           <BufferedInput
             placeholder="e.g. 2.00"
             value={filters.ln2 ?? ''}
@@ -300,7 +282,7 @@ export default function FilterSidebar({
 
       {/* Total Stone Weight */}
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Total Stone Weight (CT)</label>
+        <label className="block text-xs font-medium text-slate-600 mb-0.5">Total Stone Weight (CT)</label>
         <div className="grid grid-cols-2 gap-2">
           <BufferedInput
             placeholder="Min"
@@ -319,7 +301,7 @@ export default function FilterSidebar({
 
       {/* Pointed Weight */}
       <div>
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-0.5">
           <label className="block text-xs font-medium text-slate-600">Pointer Weight (Ct / Stone)</label>
           <span
             className="text-[11px] text-slate-400 cursor-help px-1 rounded hover:text-slate-600"
@@ -447,7 +429,7 @@ export default function FilterSidebar({
 
       {/* Total Weight Min/Max */}
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Total Weight (g)</label>
+        <label className="block text-xs font-medium text-slate-600 mb-0.5">Total Weight (g)</label>
         <div className="grid grid-cols-2 gap-2">
           <BufferedInput
             placeholder="Min"
@@ -466,7 +448,7 @@ export default function FilterSidebar({
 
       {/* Wax Weight Min/Max */}
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Wax Weight (g)</label>
+        <label className="block text-xs font-medium text-slate-600 mb-0.5">Wax Weight (g)</label>
         <div className="grid grid-cols-2 gap-2">
           <BufferedInput
             placeholder="Min"
@@ -482,6 +464,70 @@ export default function FilterSidebar({
           />
         </div>
       </div>
+
+      {/* Image Source Filter (AND Logic: Has / Miss) */}
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+            Image Source
+          </label>
+          {activeAssets.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onFilterChange('image_source', [])}
+              className="text-[10px] font-semibold text-rose-600 hover:underline cursor-pointer"
+            >
+              Clear ({activeAssets.length})
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          {[
+            { label: '500', key: '500' },
+            { label: 'Sketch', key: 'sketch' },
+            { label: 'CAD', key: 'cad' },
+            { label: 'Biodata', key: 'biodata' },
+          ].map((asset) => {
+            const isPresent = activeAssets.includes(`${asset.key}_present`);
+            const isMissing = activeAssets.includes(`${asset.key}_missing`);
+            return (
+              <div
+                key={asset.key}
+                className="flex items-center justify-between bg-white border border-slate-200/80 rounded px-2 py-1 text-[11px]"
+              >
+                <span className="font-semibold text-slate-700">{asset.label}</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleAssetCondition(asset.key, 'present')}
+                    className={`px-2 py-0.5 rounded font-semibold transition-all cursor-pointer ${
+                      isPresent
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'
+                    }`}
+                  >
+                    ✓ Has
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleAssetCondition(asset.key, 'missing')}
+                    className={`px-2 py-0.5 rounded font-semibold transition-all cursor-pointer ${
+                      isMissing
+                        ? 'bg-rose-600 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-500 hover:bg-rose-50 hover:text-rose-700'
+                    }`}
+                  >
+                    ✕ Miss
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      
     </aside>
   );
 }

@@ -27,7 +27,7 @@ import {
 const initialFilters = {
   lab_grown: '',
   only_diamonds: false,
-  image_source: '',        
+  image_source: [],        
   category: [],
   sales_cat1: [],
   sales_cat2: [],

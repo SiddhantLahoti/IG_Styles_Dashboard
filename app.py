@@ -17,7 +17,8 @@ from filters import get_unique_filter_options, apply_filters_and_paginate , get_
 from image_service import (
     index_image_directories, find_image_for_style,
     find_500_image_for_style, find_ld_image_for_style, find_cad_image_for_style,
-    get_cropped_image_bytes, generate_shortlist_excel, generate_catalogue_excel
+    get_cropped_image_bytes, generate_shortlist_excel, generate_catalogue_excel, 
+    get_or_render_biodata_png
 )
 from auth_service import (
     init_auth_db, authenticate_user, create_access_token,
@@ -162,6 +163,12 @@ def api_get_product_image(
     view: Optional[str] = Query(None),   # 'primary', 'secondary', 'cad', or None (card fallback)
     full: bool = False
 ):
+    if view == "biodata":
+        png_path = get_or_render_biodata_png(style_code)
+        if not png_path or not png_path.exists():
+            raise HTTPException(status_code=404, detail="Biodata not found")
+        return Response(content=png_path.read_bytes(), media_type="image/png")
+    
     if view == "cad":
         matched_path = find_cad_image_for_style(style_code)
     elif view == "primary":
@@ -213,7 +220,7 @@ def api_get_filters(
     min_pointed_wt: Optional[float] = None,
     max_pointed_wt: Optional[float] = None,
     lab_grown: Optional[str] = Query(None),
-    image_source: Optional[str] = Query(None),
+    image_source: Optional[List[str]] = Query(None), 
     sieve_match_mode: Optional[str] = Query("any"),
     rm_category: Optional[List[str]] = Query(None),
     rm_subcategory: Optional[List[str]] = Query(None),
@@ -286,7 +293,7 @@ def api_get_products(
     min_total_wt: Optional[float] = None,
     max_total_wt: Optional[float] = None,
     lab_grown: Optional[str] = Query(None),
-    image_source: Optional[str] = Query(None),
+    image_source: Optional[List[str]] = Query(None), 
     sieve_match_mode: Optional[str] = Query("any"),
     size: Optional[List[str]] = Query(None),
     has_set: Optional[bool] = None,
@@ -369,7 +376,7 @@ def api_get_all_filtered_products(
     max_pointed_wt: Optional[float] = None,
     lab_grown: Optional[str] = Query(None),
     only_diamonds: Optional[bool] = None,
-    image_source: Optional[str] = Query(None),
+    image_source: Optional[List[str]] = Query(None),
     sieve_match_mode: Optional[str] = Query("any"),
     size: Optional[List[str]] = Query(None),
     min_wax_wt: Optional[float] = None,       

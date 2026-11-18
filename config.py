@@ -20,6 +20,8 @@ PRIMARY_IMG_DIR = r"\\192.168.6.152\ignetmain\F-Drive\Individuals\SALES-MKTG\500
 FALLBACK_IMG_DIR = r"\\192.168.6.55\mwpict\LD"
 CAD_IMG_DIR = r"\\192.168.6.152\cad-srv\DXF-JPG\CAD-JPG"
 IMAGE_CACHE_DIR = os.path.join(BASE_DIR, ".cache_images")
+BIODATA_EXCEL_DIR = r"\\192.168.6.152\ignetmain\G-Drive\EMR-TOTAL-WT-BD\TOTAL WT B D"
+BIODATA_CACHE_DIR = os.path.join(BASE_DIR, ".cache_biodata")
 
 # 2. File A Column Definitions (Master Styles)
 COL_STYLE = "Dmcd"              # Col A: Unique Style Number

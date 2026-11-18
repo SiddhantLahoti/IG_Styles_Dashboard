@@ -81,7 +81,7 @@ export default function ProductCard({
                 : "bg-slate-100 text-slate-400 border border-slate-200"
             }`}
           >
-            LD
+            SK
           </span>
 
           <span

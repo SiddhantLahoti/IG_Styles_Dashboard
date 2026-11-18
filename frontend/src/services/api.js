@@ -63,7 +63,7 @@ function buildQueryParams(filters, page = 1, pageSize = 24, search = '') {
 
   const singleFields = [
     'start_date', 'end_date', 'min_total_wt', 'max_total_wt','min_wax_wt', 'max_wax_wt',
-    'ln1', 'ln2', 'min_rm_wt', 'max_rm_wt', 'lab_grown','image_source', 'sieve_match_mode','min_pointed_wt', 'max_pointed_wt'
+    'ln1', 'ln2', 'min_rm_wt', 'max_rm_wt', 'lab_grown', 'sieve_match_mode','min_pointed_wt', 'max_pointed_wt'
   ];
 
   singleFields.forEach((field) => {
@@ -81,6 +81,7 @@ function buildQueryParams(filters, page = 1, pageSize = 24, search = '') {
   }
 
   const arrayFields = [
+    { key: 'image_source', queryKey: 'image_source' },
     { key: 'category', queryKey: 'category' },
     { key: 'sales_cat1', queryKey: 'sales_cat1' },
     { key: 'sales_cat2', queryKey: 'sales_cat2' },
